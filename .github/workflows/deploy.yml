@@ -3,7 +3,6 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - claude/gym-workout-tracker-qdincu
       - main
   workflow_dispatch:
 
@@ -12,10 +11,11 @@ permissions:
   pages: write
   id-token: write
 
-# Allow one concurrent deployment; cancel in-progress runs for newer pushes.
+# One deployment at a time. Do NOT cancel an in-progress deploy — let it finish
+# so a published build is never left half-applied (matches GitHub's Pages template).
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
