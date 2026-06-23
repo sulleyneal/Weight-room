@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-ink-900 text-slate-100 antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  /* Strip the default spinner from number inputs so the custom steppers own the UI. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-ink-800 border border-ink-700 rounded-2xl;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-colors
+      active:scale-[0.98] select-none disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-500 text-white hover:bg-brand-600 px-4 py-3;
+  }
+
+  .btn-ghost {
+    @apply btn bg-ink-700 text-slate-200 hover:bg-ink-600 px-4 py-3;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-500/90 text-white hover:bg-red-500 px-4 py-3;
+  }
+
+  .input {
+    @apply w-full bg-ink-700 border border-ink-600 rounded-xl px-4 py-3 text-slate-100
+      placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/60;
+  }
+
+  .label {
+    @apply block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1.5;
+  }
+
+  .chip {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+}
+
+/* Respect the iOS safe area at the bottom for the nav bar. */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}

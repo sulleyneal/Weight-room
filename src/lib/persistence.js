@@ -1,0 +1,67 @@
+// App-data persistence layer.
+//
+// Everything except photos lives in localStorage as a single normalized JSON
+// document. This module is the ONLY place that talks to localStorage, and it
+// exposes a small repository-style API (load/save). Swapping to a real database
+// later means reimplementing `loadState` / `saveState` (e.g. as async fetches)
+// and the store calling them — no UI changes required.
+
+const STORAGE_KEY = 'weight-room:v1'
+
+export const SCHEMA_VERSION = 1
+
+// The normalized shape persisted to disk.
+export function emptyState() {
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    machines: [], // { id, name, model, muscleGroup, notes, hasPhoto, archived, createdAt }
+    workouts: [], // { id, date }  (date = 'YYYY-MM-DD')
+    sets: [], // { id, workoutId, machineId, weight, reps, order }
+    settings: { unit: 'lbs' },
+  }
+}
+
+export function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return migrate(parsed)
+  } catch (err) {
+    console.error('Failed to load saved data:', err)
+    return null
+  }
+}
+
+export function saveState(state) {
+  try {
+    // Persist only the data fields — never any transient UI state.
+    const toSave = {
+      schemaVersion: SCHEMA_VERSION,
+      machines: state.machines,
+      workouts: state.workouts,
+      sets: state.sets,
+      settings: state.settings,
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
+    return true
+  } catch (err) {
+    console.error('Failed to save data:', err)
+    return false
+  }
+}
+
+// Forward-compatible migration hook. Currently a no-op beyond shape-filling.
+function migrate(state) {
+  const base = emptyState()
+  return {
+    ...base,
+    ...state,
+    settings: { ...base.settings, ...(state.settings || {}) },
+    machines: state.machines || [],
+    workouts: state.workouts || [],
+    sets: state.sets || [],
+  }
+}
+
+export { STORAGE_KEY }
