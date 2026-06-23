@@ -44,7 +44,9 @@ export default function NumberStepper({
             onBlur={(e) => {
               if (e.target.value === '') onChange(min)
             }}
-            className="input text-center text-2xl font-bold tabular-nums h-full"
+            className={`input text-center text-2xl font-bold tabular-nums h-full ${
+              suffix ? 'pr-10' : ''
+            }`}
           />
           {suffix && (
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500">

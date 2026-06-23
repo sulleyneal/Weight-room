@@ -232,14 +232,13 @@ function MachineBlock({ machine, date, unit, store }) {
 
       {/* Entry */}
       <div className="p-3 border-t border-ink-700 mt-1 space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-3">
           <NumberStepper
             label={`Weight (${unitLabel(unit)})`}
             value={weight}
             onChange={setWeight}
             step={weightStep(unit)}
             min={0}
-            suffix={unitLabel(unit)}
           />
           <NumberStepper label="Reps" value={reps} onChange={setReps} step={1} min={0} />
         </div>
