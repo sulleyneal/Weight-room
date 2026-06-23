@@ -1,12 +1,11 @@
 name: Deploy to GitHub Pages
 
-# Deploy from the repository's default branch (the github-pages environment is
-# gated to it). This is currently the claude/* branch; if you make `main` the
-# default in Settings → General, switch this trigger to `main`.
+# Deploy from the default branch (main), which the github-pages environment
+# permits. Manual runs are also allowed via the Actions tab.
 on:
   push:
     branches:
-      - claude/gym-workout-tracker-qdincu
+      - main
   workflow_dispatch:
 
 permissions:
