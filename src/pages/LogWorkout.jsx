@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store/StoreContext.jsx'
 import { todayISO, fmtDate, epley1RM, sessionsForMachine } from '../lib/metrics.js'
 import { weightStep, unitLabel, fmtWeight } from '../lib/units.js'
+import { downloadJSON } from '../lib/download.js'
 import { navigate } from '../router.jsx'
 import PageHeader from '../components/PageHeader.jsx'
 import NumberStepper from '../components/NumberStepper.jsx'
@@ -16,6 +17,7 @@ import {
   IconCalendar,
   IconChevronLeft,
   IconChevronRight,
+  IconDownload,
 } from '../components/Icons.jsx'
 
 export default function LogWorkout({ date: routeDate }) {
@@ -68,6 +70,12 @@ export default function LogWorkout({ date: routeDate }) {
   function addMachineToSession(machineId) {
     setPickerOpen(false)
     setAddedMachineIds((ids) => (ids.includes(machineId) ? ids : [...ids, machineId]))
+  }
+
+  function exportThisWorkout() {
+    const payload = store.exportWorkout(date)
+    if (!payload) return
+    downloadJSON(`weight-room-${date}.json`, payload)
   }
 
   const machineById = useMemo(
@@ -134,6 +142,12 @@ export default function LogWorkout({ date: routeDate }) {
       <button className="btn-primary w-full mt-4" onClick={() => setPickerOpen(true)}>
         <IconPlus size={20} /> Add machine
       </button>
+
+      {todaysSets.length > 0 && (
+        <button className="btn-ghost w-full mt-2" onClick={exportThisWorkout}>
+          <IconDownload size={20} /> Export this day
+        </button>
+      )}
 
       <MachinePicker
         open={pickerOpen}

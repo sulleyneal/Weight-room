@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useReducer, useRe
 import { emptyState, loadState, saveState, SCHEMA_VERSION } from '../lib/persistence.js'
 import { seedMachines } from '../data/seed.js'
 import { uid } from '../lib/id.js'
-import { todayISO } from '../lib/metrics.js'
+import { todayISO, epley1RM, setVolume } from '../lib/metrics.js'
 import * as idb from '../lib/idb.js'
 
 // ---- Reducer -------------------------------------------------------------
@@ -237,6 +237,70 @@ export function StoreProvider({ children }) {
       // Settings
       setUnit(unit) {
         dispatch({ type: 'SET_UNIT', unit })
+      },
+
+      /**
+       * Build a self-contained export of a single day's workout. Machine
+       * details are denormalized into each entry (with per-set and per-machine
+       * metrics) so the file is readable and useful on its own — no need for
+       * the full library. Returns null if no sets were logged that day.
+       */
+      exportWorkout(date) {
+        const workout = state.workouts.find((w) => w.date === date)
+        if (!workout) return null
+        const sets = state.sets.filter((s) => s.workoutId === workout.id)
+        if (!sets.length) return null
+
+        const machineById = new Map(state.machines.map((m) => [m.id, m]))
+        const byMachine = new Map()
+        for (const s of sets) {
+          if (!byMachine.has(s.machineId)) byMachine.set(s.machineId, [])
+          byMachine.get(s.machineId).push(s)
+        }
+
+        let totalVolume = 0
+        let totalSets = 0
+        const machines = []
+        for (const [machineId, machineSets] of byMachine) {
+          const m = machineById.get(machineId)
+          const ordered = [...machineSets].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          let topSetWeight = 0
+          let best1RM = 0
+          let volume = 0
+          const outSets = ordered.map((s) => {
+            const est1RM = Math.round(epley1RM(s.weight, s.reps) * 10) / 10
+            topSetWeight = Math.max(topSetWeight, Number(s.weight) || 0)
+            best1RM = Math.max(best1RM, est1RM)
+            volume += setVolume(s)
+            return { weight: s.weight, reps: s.reps, order: s.order ?? 0, est1RM }
+          })
+          totalVolume += volume
+          totalSets += outSets.length
+          machines.push({
+            id: machineId,
+            name: m?.name || 'Unknown machine',
+            model: m?.model || '',
+            muscleGroup: m?.muscleGroup || 'Other',
+            notes: m?.notes || '',
+            sets: outSets,
+            topSetWeight,
+            best1RM,
+            volume,
+          })
+        }
+
+        return {
+          app: 'weight-room',
+          type: 'workout',
+          schemaVersion: SCHEMA_VERSION,
+          exportedAt: new Date().toISOString(),
+          unit: state.settings.unit,
+          workout: {
+            date: workout.date,
+            machines,
+            totals: { machines: machines.length, sets: totalSets, volume: totalVolume },
+          },
+        }
       },
 
       // Data management

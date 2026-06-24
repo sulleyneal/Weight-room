@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useStore } from '../store/StoreContext.jsx'
 import { unitLabel } from '../lib/units.js'
+import { downloadJSON } from '../lib/download.js'
 import PageHeader from '../components/PageHeader.jsx'
 import { IconImage, IconTrash } from '../components/Icons.jsx'
 
@@ -16,15 +17,7 @@ export default function SettingsPage() {
   async function handleExport() {
     try {
       const payload = await exportData()
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `weight-room-backup-${new Date().toISOString().slice(0, 10)}.json`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      downloadJSON(`weight-room-backup-${new Date().toISOString().slice(0, 10)}.json`, payload)
       setStatus({ ok: true, msg: 'Backup downloaded.' })
     } catch (err) {
       setStatus({ ok: false, msg: `Export failed: ${err.message}` })
