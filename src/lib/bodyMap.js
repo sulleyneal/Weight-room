@@ -19,6 +19,8 @@ export const VIEWBOX = `0 0 ${VIEW_W} ${VIEW_H}`
 export const BASE_FILL = '#27314c'
 export const BASE_STROKE = '#3a4663'
 export const REGION_IDLE = '#33415f'
+// Faint contour lines that signal orientation (front vs back).
+export const DETAIL_STROKE = '#566590'
 
 const BODY_OUTLINE =
   'M 100 58 C 104 58 108 58 112 60 C 116 62 119 66.3 124 70 C 129 73.7 137.7 77 142 82 ' +
@@ -95,6 +97,20 @@ export const BACK_REGIONS = [
   },
 ]
 
+// Orientation cues drawn as thin contour lines on top of the figure so you can
+// tell front from back at a glance, independent of which muscles are colored.
+export const FRONT_DETAILS = [
+  { t: 'path', d: 'M90 84 L100 95 L110 84' }, // clavicle / sternal notch "V"
+  { t: 'line', x1: 100, y1: 96, x2: 100, y2: 172 }, // sternum + linea alba
+  { t: 'path', d: 'M97 150 Q100 154 103 150' }, // navel
+]
+export const BACK_DETAILS = [
+  { t: 'line', x1: 100, y1: 80, x2: 100, y2: 182 }, // spine
+  { t: 'path', d: 'M87 98 Q91 94 92 105' }, // left scapula
+  { t: 'path', d: 'M113 98 Q109 94 108 105' }, // right scapula
+  { t: 'line', x1: 100, y1: 210, x2: 100, y2: 232 }, // glute cleft
+]
+
 /**
  * Normalize a map of group -> volume into group -> intensity ratio (0..1),
  * where the most-worked group is 1. Groups with no volume are omitted.
@@ -120,9 +136,12 @@ export function regionStyle(group, intensities) {
 /** Render a shape to an SVG element string with extra attributes. */
 export function shapeToString(s, attrs = '') {
   if (s.t === 'path') return `<path d="${s.d}" ${attrs}/>`
+  if (s.t === 'line') return `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" ${attrs}/>`
   const rot = s.rot ? ` transform="rotate(${s.rot} ${s.cx} ${s.cy})"` : ''
   return `<ellipse cx="${s.cx}" cy="${s.cy}" rx="${s.rx}" ry="${s.ry}"${rot} ${attrs}/>`
 }
+
+const DETAIL_ATTRS = `fill="none" stroke="${DETAIL_STROKE}" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.8"`
 
 /**
  * Build the inner SVG markup for one figure (front or back) at native viewBox
@@ -141,5 +160,8 @@ export function figureMarkup(view, intensities) {
         .join('')
     })
     .join('')
-  return base + muscles
+  const details = (view === 'back' ? BACK_DETAILS : FRONT_DETAILS)
+    .map((s) => shapeToString(s, DETAIL_ATTRS))
+    .join('')
+  return base + muscles + details
 }
