@@ -1,71 +1,98 @@
-// Stylized front/back body diagrams used by the workout summary.
+// Stylized-but-anatomical front/back body diagrams used by the workout summary.
 //
 // Geometry is defined once here as plain shape data so both the on-screen React
 // preview (BodyMap.jsx) and the exported PNG (summaryImage.js) render an
 // identical figure. Each muscle region is tagged with a muscle group; regions
 // whose group was trained that day get colored (shaded by relative volume),
 // everything else stays a muted base tone.
+//
+// The silhouette outline path was produced by smoothing a set of anatomical
+// landmark points (Catmull-Rom). See scripts notes; coordinates are in a
+// 200x400 viewBox, centered on x=100.
 
 import { MUSCLE_COLORS } from '../data/seed.js'
 
 export const VIEW_W = 200
-export const VIEW_H = 380
+export const VIEW_H = 400
 export const VIEWBOX = `0 0 ${VIEW_W} ${VIEW_H}`
 
 export const BASE_FILL = '#27314c'
 export const BASE_STROKE = '#3a4663'
 export const REGION_IDLE = '#33415f'
 
-// Shared body silhouette (drawn underneath the muscle regions).
+const BODY_OUTLINE =
+  'M 100 58 C 104 58 108 58 112 60 C 116 62 119 66.3 124 70 C 129 73.7 137.7 77 142 82 ' +
+  'C 146.3 87 148.3 88.7 150 100 C 151.7 111.3 151 133.3 152 150 C 153 166.7 155.7 188.7 156 200 ' +
+  'C 156.3 211.3 155.7 213 154 218 C 152.3 223 148.3 230.3 146 230 C 143.7 229.7 141.3 224.7 140 216 ' +
+  'C 138.7 207.3 139 189 138 178 C 137 167 136 163 134 150 C 132 137 128.3 103.3 126 100 ' +
+  'C 123.7 96.7 121.7 118.3 120 130 C 118.3 141.7 115 157 116 170 C 117 183 123.3 196.3 126 208 ' +
+  'C 128.7 219.7 132.3 224.7 132 240 C 131.7 255.3 125 285 124 300 C 123 315 127.5 318.7 126 330 ' +
+  'C 124.5 341.3 115.7 359 115 368 C 114.3 377 123.8 381.3 122 384 C 120.2 386.7 106.7 386.7 104 384 ' +
+  'C 101.3 381.3 105.3 382 106 368 C 106.7 354 108 320.7 108 300 C 108 279.3 107.3 254.3 106 244 ' +
+  'C 104.7 233.7 102 238 100 238 C 98 238 95.3 233.7 94 244 C 92.7 254.3 92 279.3 92 300 ' +
+  'C 92 320.7 93.3 354 94 368 C 94.7 382 98.7 381.3 96 384 C 93.3 386.7 79.8 386.7 78 384 ' +
+  'C 76.2 381.3 85.7 377 85 368 C 84.3 359 75.5 341.3 74 330 C 72.5 318.7 77 315 76 300 ' +
+  'C 75 285 68.3 255.3 68 240 C 67.7 224.7 71.3 219.7 74 208 C 76.7 196.3 83 183 84 170 ' +
+  'C 85 157 81.7 141.7 80 130 C 78.3 118.3 76.3 96.7 74 100 C 71.7 103.3 68 137 66 150 ' +
+  'C 64 163 63 167 62 178 C 61 189 61.3 207.3 60 216 C 58.7 224.7 56.3 229.7 54 230 ' +
+  'C 51.7 230.3 47.7 223 46 218 C 44.3 213 43.7 211.3 44 200 C 44.3 188.7 47 166.7 48 150 ' +
+  'C 49 133.3 48.3 111.3 50 100 C 51.7 88.7 53.7 87 58 82 C 62.3 77 71 73.7 76 70 ' +
+  'C 81 66.3 84 62 88 60 C 92 58 96 58 100 58 Z'
+
+// Shared body silhouette (outline + head), drawn beneath the muscle regions.
 export const SILHOUETTE = [
-  { t: 'ellipse', cx: 100, cy: 36, rx: 20, ry: 22 }, // head
-  { t: 'rect', x: 90, y: 54, w: 20, h: 14, r: 6 }, // neck
-  { t: 'rect', x: 60, y: 66, w: 80, h: 116, r: 20 }, // torso
-  { t: 'rect', x: 38, y: 72, w: 22, h: 64, r: 11 }, // L upper arm
-  { t: 'rect', x: 140, y: 72, w: 22, h: 64, r: 11 }, // R upper arm
-  { t: 'rect', x: 36, y: 134, w: 20, h: 66, r: 10 }, // L forearm
-  { t: 'rect', x: 144, y: 134, w: 20, h: 66, r: 10 }, // R forearm
-  { t: 'rect', x: 66, y: 178, w: 68, h: 28, r: 12 }, // pelvis
-  { t: 'rect', x: 68, y: 200, w: 28, h: 92, r: 14 }, // L thigh
-  { t: 'rect', x: 104, y: 200, w: 28, h: 92, r: 14 }, // R thigh
-  { t: 'rect', x: 70, y: 290, w: 24, h: 74, r: 12 }, // L calf
-  { t: 'rect', x: 106, y: 290, w: 24, h: 74, r: 12 }, // R calf
+  { t: 'path', d: BODY_OUTLINE },
+  { t: 'ellipse', cx: 100, cy: 36, rx: 17, ry: 21 },
 ]
 
-const shoulders = [
-  { t: 'ellipse', cx: 49, cy: 80, rx: 14, ry: 13 },
-  { t: 'ellipse', cx: 151, cy: 80, rx: 14, ry: 13 },
+const delts = [
+  { t: 'ellipse', cx: 138, cy: 92, rx: 13, ry: 12 },
+  { t: 'ellipse', cx: 62, cy: 92, rx: 13, ry: 12 },
 ]
 const upperArms = [
-  { t: 'rect', x: 38, y: 84, w: 22, h: 48, r: 11 },
-  { t: 'rect', x: 140, y: 84, w: 22, h: 48, r: 11 },
+  { t: 'ellipse', cx: 146, cy: 128, rx: 8, ry: 22, rot: -6 },
+  { t: 'ellipse', cx: 54, cy: 128, rx: 8, ry: 22, rot: 6 },
 ]
 const thighs = [
-  { t: 'rect', x: 70, y: 206, w: 24, h: 78, r: 12 },
-  { t: 'rect', x: 106, y: 206, w: 24, h: 78, r: 12 },
+  { t: 'ellipse', cx: 116, cy: 270, rx: 13, ry: 46 },
+  { t: 'ellipse', cx: 84, cy: 270, rx: 13, ry: 46 },
 ]
 
-// Muscle regions per view. `group` matches the muscle-group taxonomy.
 export const FRONT_REGIONS = [
-  { group: 'Shoulders', shapes: shoulders },
+  { group: 'Shoulders', shapes: delts },
   {
     group: 'Chest',
     shapes: [
-      { t: 'rect', x: 66, y: 78, w: 32, h: 28, r: 9 },
-      { t: 'rect', x: 102, y: 78, w: 32, h: 28, r: 9 },
+      { t: 'ellipse', cx: 112, cy: 110, rx: 15, ry: 11, rot: -12 },
+      { t: 'ellipse', cx: 88, cy: 110, rx: 15, ry: 11, rot: 12 },
     ],
   },
-  { group: 'Core', shapes: [{ t: 'rect', x: 80, y: 110, w: 40, h: 60, r: 10 }] },
+  { group: 'Core', shapes: [{ t: 'path', d: 'M86 130 Q100 126 114 130 L112 172 Q100 178 88 172 Z' }] },
   { group: 'Biceps', shapes: upperArms },
   { group: 'Legs', shapes: thighs },
 ]
 
 export const BACK_REGIONS = [
-  { group: 'Shoulders', shapes: shoulders },
-  { group: 'Back', shapes: [{ t: 'rect', x: 66, y: 76, w: 68, h: 50, r: 14 }] },
+  { group: 'Shoulders', shapes: delts },
+  {
+    group: 'Back',
+    shapes: [
+      { t: 'path', d: 'M84 84 Q100 78 116 84 L112 104 Q100 100 88 104 Z' },
+      {
+        t: 'path',
+        d: 'M88 106 Q118 112 120 118 L116 165 Q100 150 100 150 Q100 150 84 165 L80 118 Q82 112 88 106 Z',
+      },
+    ],
+  },
   { group: 'Triceps', shapes: upperArms },
-  { group: 'Core', shapes: [{ t: 'rect', x: 80, y: 128, w: 40, h: 42, r: 10 }] },
-  { group: 'Legs', shapes: thighs },
+  { group: 'Core', shapes: [{ t: 'path', d: 'M88 150 Q100 146 112 150 L110 178 Q100 182 90 178 Z' }] },
+  {
+    group: 'Legs',
+    shapes: [
+      { t: 'ellipse', cx: 116, cy: 272, rx: 13, ry: 46 },
+      { t: 'ellipse', cx: 84, cy: 272, rx: 13, ry: 46 },
+    ],
+  },
 ]
 
 /**
@@ -85,22 +112,21 @@ export function computeIntensities(groupVolumes) {
 /** Fill + opacity for a region given the computed intensities. */
 export function regionStyle(group, intensities) {
   const ratio = intensities[group]
-  if (ratio == null) return { fill: REGION_IDLE, opacity: 0.55 }
+  if (ratio == null) return { fill: REGION_IDLE, opacity: 0.5 }
   const color = MUSCLE_COLORS[group] || MUSCLE_COLORS.Other
-  return { fill: color, opacity: 0.45 + 0.55 * ratio }
+  return { fill: color, opacity: 0.5 + 0.5 * ratio }
 }
 
 /** Render a shape to an SVG element string with extra attributes. */
 export function shapeToString(s, attrs = '') {
-  if (s.t === 'ellipse') {
-    return `<ellipse cx="${s.cx}" cy="${s.cy}" rx="${s.rx}" ry="${s.ry}" ${attrs}/>`
-  }
-  return `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="${s.r}" ${attrs}/>`
+  if (s.t === 'path') return `<path d="${s.d}" ${attrs}/>`
+  const rot = s.rot ? ` transform="rotate(${s.rot} ${s.cx} ${s.cy})"` : ''
+  return `<ellipse cx="${s.cx}" cy="${s.cy}" rx="${s.rx}" ry="${s.ry}"${rot} ${attrs}/>`
 }
 
 /**
  * Build the inner SVG markup for one figure (front or back) at native viewBox
- * coordinates. Caller wraps it in an <svg>/<g> with the right viewBox/transform.
+ * coordinates. Caller wraps it in an <svg> with the right viewBox/size.
  */
 export function figureMarkup(view, intensities) {
   const regions = view === 'back' ? BACK_REGIONS : FRONT_REGIONS

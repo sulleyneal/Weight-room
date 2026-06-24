@@ -9,8 +9,9 @@ import {
 } from '../lib/bodyMap.js'
 
 function Shape({ s, ...rest }) {
-  if (s.t === 'ellipse') return <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} {...rest} />
-  return <rect x={s.x} y={s.y} width={s.w} height={s.h} rx={s.r} {...rest} />
+  if (s.t === 'path') return <path d={s.d} {...rest} />
+  const transform = s.rot ? `rotate(${s.rot} ${s.cx} ${s.cy})` : undefined
+  return <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} transform={transform} {...rest} />
 }
 
 function Figure({ view, intensities, label }) {

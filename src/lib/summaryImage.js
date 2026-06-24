@@ -54,8 +54,8 @@ export function buildSummarySVG(summary) {
 
   // Body figures (hero)
   const figY = 220
-  const figH = 420
-  const figW = Math.round(200 * (figH / 380)) // preserve aspect (~221)
+  const figH = 430
+  const figW = Math.round(200 * (figH / 400)) // preserve aspect
   const gap = 96
   const groupW = figW * 2 + gap
   const startX = Math.round((W - groupW) / 2)
