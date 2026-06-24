@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store/StoreContext.jsx'
-import { todayISO, fmtDate, epley1RM, sessionsForMachine } from '../lib/metrics.js'
+import { todayISO, fmtDate, fmtDateShort, epley1RM, sessionsForMachine } from '../lib/metrics.js'
 import { weightStep, unitLabel, fmtWeight } from '../lib/units.js'
 import { downloadJSON } from '../lib/download.js'
 import { navigate } from '../router.jsx'
@@ -10,6 +10,7 @@ import MuscleChip from '../components/MuscleChip.jsx'
 import Modal from '../components/Modal.jsx'
 import MachinePhoto from '../components/MachinePhoto.jsx'
 import SummaryModal from '../components/SummaryModal.jsx'
+import RestTimer from '../components/RestTimer.jsx'
 import {
   IconPlus,
   IconTrash,
@@ -198,6 +199,21 @@ function MachineBlock({ machine, date, unit, store }) {
     return last.sets[last.sets.length - 1] || null
   }, [machine.id, state.workouts, state.sets, date])
 
+  // Most recent session strictly before this date, for the "last time" hint.
+  const prevSession = useMemo(() => {
+    const prior = sessionsForMachine(machine.id, state.workouts, state.sets).filter(
+      (s) => s.date < date,
+    )
+    return prior.length ? prior[prior.length - 1] : null
+  }, [machine.id, state.workouts, state.sets, date])
+
+  // Heaviest set last time + a small progressive-overload bump.
+  const prevTopSet = useMemo(() => {
+    if (!prevSession) return null
+    return prevSession.sets.reduce((m, s) => (s.weight > (m?.weight ?? -1) ? s : m), null)
+  }, [prevSession])
+  const suggestWeight = prevTopSet ? prevTopSet.weight + weightStep(unit) : null
+
   const lastTodaySet = sets[sets.length - 1] || null
   const seedSet = lastTodaySet || lastEverSet
 
@@ -261,6 +277,31 @@ function MachineBlock({ machine, date, unit, store }) {
 
       {/* Entry */}
       <div className="p-3 border-t border-ink-700 mt-1 space-y-3">
+        {prevSession && (
+          <div className="rounded-xl bg-ink-700/50 border border-ink-600 p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-slate-400">Last · {fmtDateShort(prevSession.date)}</span>
+              {suggestWeight != null && (
+                <button
+                  className="text-xs font-bold text-brand-400"
+                  onClick={() => {
+                    setWeight(suggestWeight)
+                    setReps(prevTopSet.reps)
+                  }}
+                >
+                  Try {fmtWeight(suggestWeight, unit)} →
+                </button>
+              )}
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {prevSession.sets.map((s, i) => (
+                <span key={i} className="chip bg-ink-600 text-slate-300 px-2 py-0.5 tabular-nums">
+                  {fmtWeight(s.weight, unit)} × {s.reps}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="space-y-3">
           <NumberStepper
             label={`Weight (${unitLabel(unit)})`}
@@ -281,6 +322,10 @@ function MachineBlock({ machine, date, unit, store }) {
           <button className="btn-ghost text-sm" onClick={copyLastWorkout}>
             <IconCopy size={18} /> Copy last workout
           </button>
+        </div>
+
+        <div className="pt-1">
+          <RestTimer />
         </div>
 
         {sets.length > 0 && (
