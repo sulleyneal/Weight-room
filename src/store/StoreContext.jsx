@@ -321,6 +321,9 @@ export function StoreProvider({ children }) {
       },
 
       async importData(payload) {
+        if (payload?.type === 'workout') {
+          throw new Error("That's a single-day file — use “Import a day” instead.")
+        }
         const data = payload?.data || payload
         if (!data || !Array.isArray(data.machines)) {
           throw new Error('Invalid backup file: missing machines.')
@@ -334,6 +337,89 @@ export function StoreProvider({ children }) {
         }
         await idb.replaceAllPhotos(payload?.photos || {})
         dispatch({ type: 'REPLACE_ALL', payload: next })
+      },
+
+      /**
+       * Merge a single-day export (from exportWorkout) into the current log
+       * without touching anything else. Machines are matched to existing ones
+       * by id, then by name+model (case-insensitive); unmatched machines are
+       * created. Sets are appended to the workout for that date (a workout is
+       * created if none exists). Returns a summary for user feedback.
+       */
+      importWorkout(payload) {
+        const wk = payload?.workout
+        if (!payload || payload.type !== 'workout' || !wk || !Array.isArray(wk.machines)) {
+          throw new Error('Not a single-day workout file.')
+        }
+        const date = wk.date
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
+          throw new Error('File is missing a valid workout date.')
+        }
+
+        const machines = [...state.machines]
+        const norm = (s) => (s || '').trim().toLowerCase()
+        const findMachine = (m) => {
+          let found = machines.find((x) => x.id === m.id)
+          if (found) return found
+          return (
+            machines.find(
+              (x) => norm(x.name) === norm(m.name) && norm(x.model) === norm(m.model),
+            ) || null
+          )
+        }
+
+        const workouts = [...state.workouts]
+        let workout = workouts.find((w) => w.date === date)
+        const dayHadData =
+          Boolean(workout) && state.sets.some((s) => s.workoutId === workout.id)
+        if (!workout) {
+          workout = { id: uid('w'), date }
+          workouts.push(workout)
+        }
+
+        const sets = [...state.sets]
+        let machinesAdded = 0
+        let machinesMatched = 0
+        let setsAdded = 0
+
+        for (const m of wk.machines) {
+          let target = findMachine(m)
+          if (!target) {
+            target = {
+              id: uid('m'),
+              name: (m.name || 'Untitled Machine').trim(),
+              model: (m.model || '').trim(),
+              muscleGroup: m.muscleGroup || 'Other',
+              notes: (m.notes || '').trim(),
+              hasPhoto: false,
+              archived: false,
+              createdAt: Date.now(),
+            }
+            machines.push(target)
+            machinesAdded++
+          } else {
+            machinesMatched++
+          }
+          const incoming = Array.isArray(m.sets) ? [...m.sets] : []
+          incoming.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          let order = sets.filter(
+            (s) => s.workoutId === workout.id && s.machineId === target.id,
+          ).length
+          for (const s of incoming) {
+            sets.push({
+              id: uid('s'),
+              workoutId: workout.id,
+              machineId: target.id,
+              weight: Number(s.weight) || 0,
+              reps: Number(s.reps) || 0,
+              order: order++,
+            })
+            setsAdded++
+          }
+        }
+
+        dispatch({ type: 'REPLACE_ALL', payload: { ...state, machines, workouts, sets } })
+        return { date, machinesAdded, machinesMatched, setsAdded, dayHadData }
       },
 
       async resetAll() {

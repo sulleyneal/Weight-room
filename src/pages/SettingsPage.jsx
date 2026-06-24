@@ -3,11 +3,13 @@ import { useStore } from '../store/StoreContext.jsx'
 import { unitLabel } from '../lib/units.js'
 import { downloadJSON } from '../lib/download.js'
 import PageHeader from '../components/PageHeader.jsx'
-import { IconImage, IconTrash } from '../components/Icons.jsx'
+import { IconImage, IconTrash, IconDownload } from '../components/Icons.jsx'
 
 export default function SettingsPage() {
-  const { state, setUnit, exportData, importData, resetAll, loadSampleHistory } = useStore()
+  const { state, setUnit, exportData, importData, importWorkout, resetAll, loadSampleHistory } =
+    useStore()
   const fileRef = useRef(null)
+  const dayFileRef = useRef(null)
   const [status, setStatus] = useState(null)
 
   const machineCount = state.machines.length
@@ -39,6 +41,40 @@ export default function SettingsPage() {
       const payload = JSON.parse(text)
       await importData(payload)
       setStatus({ ok: true, msg: 'Backup imported.' })
+    } catch (err) {
+      setStatus({ ok: false, msg: `Import failed: ${err.message}` })
+    }
+  }
+
+  async function handleImportDayFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const payload = JSON.parse(await file.text())
+      if (payload?.type !== 'workout' || !payload?.workout?.date) {
+        throw new Error('Not a single-day file. Use “Import backup” for a full backup.')
+      }
+      const date = payload.workout.date
+      const existing = state.workouts.find((w) => w.date === date)
+      const dayHasData = existing && state.sets.some((s) => s.workoutId === existing.id)
+      const warn = dayHasData
+        ? `\n\nHeads up: you already have sets logged on ${date}. Imported sets will be ADDED to that day (not replaced).`
+        : ''
+      const unitWarn =
+        payload.unit && payload.unit !== state.settings.unit
+          ? `\n\nNote: this file was logged in ${payload.unit}; weights import as-is (no conversion).`
+          : ''
+      if (
+        !confirm(
+          `Merge the workout from ${date} into your log? Machines are matched by name/model and created if new.${warn}${unitWarn}`,
+        )
+      )
+        return
+      const r = importWorkout(payload)
+      const parts = [`${r.setsAdded} sets added for ${r.date}`]
+      if (r.machinesAdded) parts.push(`${r.machinesAdded} new machine${r.machinesAdded > 1 ? 's' : ''}`)
+      setStatus({ ok: true, msg: `Imported: ${parts.join(', ')}.` })
     } catch (err) {
       setStatus({ ok: false, msg: `Import failed: ${err.message}` })
     }
@@ -124,6 +160,18 @@ export default function SettingsPage() {
             </div>
           </button>
           <button
+            className="w-full p-4 text-left hover:bg-ink-700/50 transition flex items-center gap-3"
+            onClick={() => dayFileRef.current?.click()}
+          >
+            <IconDownload size={20} className="text-slate-400 shrink-0 rotate-180" />
+            <div>
+              <div className="font-semibold">Import a day (merge)</div>
+              <div className="text-sm text-slate-400">
+                Adds a single “Export this day” file into your log without replacing anything.
+              </div>
+            </div>
+          </button>
+          <button
             className="w-full p-4 text-left hover:bg-ink-700/50 transition"
             onClick={handleSample}
           >
@@ -137,6 +185,13 @@ export default function SettingsPage() {
           accept="application/json,.json"
           className="hidden"
           onChange={handleImportFile}
+        />
+        <input
+          ref={dayFileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={handleImportDayFile}
         />
       </section>
 
