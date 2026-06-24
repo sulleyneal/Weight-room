@@ -1,14 +1,14 @@
-// Stylized-but-anatomical front/back body diagrams used by the workout summary.
+// Thin line-art front/back anatomy used by the workout summary.
 //
-// Geometry is defined once here as plain shape data so both the on-screen React
-// preview (BodyMap.jsx) and the exported PNG (summaryImage.js) render an
-// identical figure. Each muscle region is tagged with a muscle group; regions
-// whose group was trained that day get colored (shaded by relative volume),
-// everything else stays a muted base tone.
+// The body is drawn as light contour lines (outline + muscle delineations) with
+// no solid fill — a clean anatomical look. Muscle groups that were trained that
+// day get a translucent color wash painted *behind* the line art; untrained
+// groups draw nothing, so the figure reads like a neutral anatomy chart with
+// color only where you worked.
 //
-// The silhouette outline path was produced by smoothing a set of anatomical
-// landmark points (Catmull-Rom). See scripts notes; coordinates are in a
-// 200x400 viewBox, centered on x=100.
+// Geometry lives here once (as point data + a Catmull-Rom smoother) so the
+// on-screen React preview (BodyMap.jsx) and the exported PNG (summaryImage.js)
+// render an identical figure. Coordinates use a 200x400 viewBox, centered x=100.
 
 import { MUSCLE_COLORS } from '../data/seed.js'
 
@@ -16,48 +16,101 @@ export const VIEW_W = 200
 export const VIEW_H = 400
 export const VIEWBOX = `0 0 ${VIEW_W} ${VIEW_H}`
 
-export const BASE_FILL = '#27314c'
-export const BASE_STROKE = '#3a4663'
-export const REGION_IDLE = '#33415f'
-// Faint contour lines that signal orientation (front vs back).
-export const DETAIL_STROKE = '#566590'
+export const LINE_STROKE = '#c2cbdb'
+export const OUTLINE_STROKE = '#d8e0ec'
+export const LINE_WIDTH = 1.3
+export const OUTLINE_WIDTH = 1.7
 
-const BODY_OUTLINE =
-  'M 100 58 C 104 58 108 58 112 60 C 116 62 119 66.3 124 70 C 129 73.7 137.7 77 142 82 ' +
-  'C 146.3 87 148.3 88.7 150 100 C 151.7 111.3 151 133.3 152 150 C 153 166.7 155.7 188.7 156 200 ' +
-  'C 156.3 211.3 155.7 213 154 218 C 152.3 223 148.3 230.3 146 230 C 143.7 229.7 141.3 224.7 140 216 ' +
-  'C 138.7 207.3 139 189 138 178 C 137 167 136 163 134 150 C 132 137 128.3 103.3 126 100 ' +
-  'C 123.7 96.7 121.7 118.3 120 130 C 118.3 141.7 115 157 116 170 C 117 183 123.3 196.3 126 208 ' +
-  'C 128.7 219.7 132.3 224.7 132 240 C 131.7 255.3 125 285 124 300 C 123 315 127.5 318.7 126 330 ' +
-  'C 124.5 341.3 115.7 359 115 368 C 114.3 377 123.8 381.3 122 384 C 120.2 386.7 106.7 386.7 104 384 ' +
-  'C 101.3 381.3 105.3 382 106 368 C 106.7 354 108 320.7 108 300 C 108 279.3 107.3 254.3 106 244 ' +
-  'C 104.7 233.7 102 238 100 238 C 98 238 95.3 233.7 94 244 C 92.7 254.3 92 279.3 92 300 ' +
-  'C 92 320.7 93.3 354 94 368 C 94.7 382 98.7 381.3 96 384 C 93.3 386.7 79.8 386.7 78 384 ' +
-  'C 76.2 381.3 85.7 377 85 368 C 84.3 359 75.5 341.3 74 330 C 72.5 318.7 77 315 76 300 ' +
-  'C 75 285 68.3 255.3 68 240 C 67.7 224.7 71.3 219.7 74 208 C 76.7 196.3 83 183 84 170 ' +
-  'C 85 157 81.7 141.7 80 130 C 78.3 118.3 76.3 96.7 74 100 C 71.7 103.3 68 137 66 150 ' +
-  'C 64 163 63 167 62 178 C 61 189 61.3 207.3 60 216 C 58.7 224.7 56.3 229.7 54 230 ' +
-  'C 51.7 230.3 47.7 223 46 218 C 44.3 213 43.7 211.3 44 200 C 44.3 188.7 47 166.7 48 150 ' +
-  'C 49 133.3 48.3 111.3 50 100 C 51.7 88.7 53.7 87 58 82 C 62.3 77 71 73.7 76 70 ' +
-  'C 81 66.3 84 62 88 60 C 92 58 96 58 100 58 Z'
+// ---- smoothing + mirroring ----
+function bez(pts, closed) {
+  const n = pts.length
+  if (n < 2) return ''
+  const P = closed
+    ? (i) => pts[((i % n) + n) % n]
+    : (i) => pts[Math.max(0, Math.min(n - 1, i))]
+  let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)} `
+  const last = closed ? n : n - 1
+  for (let i = 0; i < last; i++) {
+    const p0 = P(i - 1)
+    const p1 = P(i)
+    const p2 = P(i + 1)
+    const p3 = P(i + 2)
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6
+    d += `C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)} `
+  }
+  return d + (closed ? 'Z' : '')
+}
+const mir = ([x, y]) => [200 - x, y]
 
-// Shared body silhouette (outline + head), drawn beneath the muscle regions.
-export const SILHOUETTE = [
-  { t: 'path', d: BODY_OUTLINE },
-  { t: 'ellipse', cx: 100, cy: 36, rx: 17, ry: 21 },
+// ---- body outline + head ----
+const OUTLINE_PTS = [
+  [100, 58], [112, 60], [124, 70], [142, 82], [150, 100], [152, 150], [156, 200],
+  [154, 218], [146, 230], [140, 216], [138, 178], [134, 150], [126, 100], [120, 130],
+  [116, 170], [126, 208], [132, 240], [124, 300], [126, 330], [115, 368], [122, 384],
+  [104, 384], [106, 368], [108, 300], [106, 244], [100, 238],
 ]
+export const BODY_OUTLINE = bez([...OUTLINE_PTS, ...OUTLINE_PTS.slice(1, -1).reverse().map(mir)], true)
+export const HEAD_PATH =
+  'M100 14 C111 14 119 23 119 35 C119 48 111 58 100 58 C89 58 81 48 81 35 C81 23 89 14 100 14 Z'
 
+// ---- muscle contour lines (center drawn as-is; side mirrored to both sides) ----
+const FRONT_LINES = {
+  center: [[[100, 96], [100, 120], [100, 168]]],
+  side: [
+    [[100, 95], [110, 87], [119, 85]], // clavicle
+    [[119, 86], [122, 96], [123, 104], [116, 116], [100, 118]], // pectoral
+    [[123, 90], [138, 85], [148, 100], [147, 116]], // deltoid cap
+    [[147, 112], [151, 132], [147, 152]], // biceps
+    [[108, 122], [111, 144], [108, 167]], // rectus border
+    [[100, 131], [108, 131]],
+    [[100, 143], [108, 143]],
+    [[100, 155], [108, 155]], // ab rows
+    [[100, 185], [112, 173], [117, 168]], // lower-ab V
+    [[120, 132], [116, 150], [119, 166]], // oblique
+    [[126, 214], [131, 252], [125, 296]], // quad outer
+    [[114, 220], [116, 258], [113, 296]], // quad center
+    [[103, 218], [105, 258], [104, 296]], // quad inner
+    [[104, 300], [114, 305], [123, 299]], // knee
+    [[121, 314], [125, 340], [118, 362]], // shin
+  ],
+}
+const BACK_LINES = {
+  center: [
+    [[100, 78], [100, 130], [100, 182]], // spine
+    [[100, 208], [100, 232]], // glute cleft
+  ],
+  side: [
+    [[100, 80], [118, 90], [124, 100]], // trap upper
+    [[124, 100], [110, 112], [100, 120]], // trap lower
+    [[125, 100], [123, 132], [108, 150], [100, 152]], // lat
+    [[123, 90], [138, 85], [148, 100], [147, 114]], // rear delt
+    [[147, 112], [151, 132], [147, 152]], // triceps
+    [[105, 128], [105, 178]], // erector
+    [[100, 206], [116, 207], [123, 219], [115, 232], [100, 231]], // glute
+    [[126, 240], [131, 270], [125, 298]], // hamstring outer
+    [[104, 242], [105, 272], [104, 298]], // hamstring inner
+    [[122, 312], [127, 334], [118, 360]], // calf
+  ],
+}
+function linePaths(set) {
+  return [...set.center, ...set.side, ...set.side.map((a) => a.map(mir))].map((pts) =>
+    bez(pts, false),
+  )
+}
+export const FRONT_LINE_PATHS = linePaths(FRONT_LINES)
+export const BACK_LINE_PATHS = linePaths(BACK_LINES)
+
+// ---- muscle highlight zones (filled behind the lines, only when trained) ----
 const delts = [
-  { t: 'ellipse', cx: 138, cy: 92, rx: 13, ry: 12 },
-  { t: 'ellipse', cx: 62, cy: 92, rx: 13, ry: 12 },
+  { t: 'ellipse', cx: 138, cy: 96, rx: 12, ry: 13 },
+  { t: 'ellipse', cx: 62, cy: 96, rx: 12, ry: 13 },
 ]
-const upperArms = [
-  { t: 'ellipse', cx: 146, cy: 128, rx: 8, ry: 22, rot: -6 },
-  { t: 'ellipse', cx: 54, cy: 128, rx: 8, ry: 22, rot: 6 },
-]
-const thighs = [
-  { t: 'ellipse', cx: 116, cy: 270, rx: 13, ry: 46 },
-  { t: 'ellipse', cx: 84, cy: 270, rx: 13, ry: 46 },
+const arms = [
+  { t: 'ellipse', cx: 149, cy: 130, rx: 8, ry: 22, rot: -4 },
+  { t: 'ellipse', cx: 51, cy: 130, rx: 8, ry: 22, rot: 4 },
 ]
 
 export const FRONT_REGIONS = [
@@ -65,13 +118,19 @@ export const FRONT_REGIONS = [
   {
     group: 'Chest',
     shapes: [
-      { t: 'ellipse', cx: 112, cy: 110, rx: 15, ry: 11, rot: -12 },
-      { t: 'ellipse', cx: 88, cy: 110, rx: 15, ry: 11, rot: 12 },
+      { t: 'ellipse', cx: 112, cy: 106, rx: 14, ry: 12, rot: -8 },
+      { t: 'ellipse', cx: 88, cy: 106, rx: 14, ry: 12, rot: 8 },
     ],
   },
-  { group: 'Core', shapes: [{ t: 'path', d: 'M86 130 Q100 126 114 130 L112 172 Q100 178 88 172 Z' }] },
-  { group: 'Biceps', shapes: upperArms },
-  { group: 'Legs', shapes: thighs },
+  { group: 'Core', shapes: [{ t: 'path', d: 'M90 120 Q100 117 110 120 L108 168 Q100 174 92 168 Z' }] },
+  { group: 'Biceps', shapes: arms },
+  {
+    group: 'Legs',
+    shapes: [
+      { t: 'ellipse', cx: 116, cy: 255, rx: 15, ry: 44 },
+      { t: 'ellipse', cx: 84, cy: 255, rx: 15, ry: 44 },
+    ],
+  },
 ]
 
 export const BACK_REGIONS = [
@@ -79,36 +138,22 @@ export const BACK_REGIONS = [
   {
     group: 'Back',
     shapes: [
-      { t: 'path', d: 'M84 84 Q100 78 116 84 L112 104 Q100 100 88 104 Z' },
-      {
-        t: 'path',
-        d: 'M88 106 Q118 112 120 118 L116 165 Q100 150 100 150 Q100 150 84 165 L80 118 Q82 112 88 106 Z',
-      },
+      { t: 'path', d: 'M100 80 L124 100 L100 124 L76 100 Z' },
+      { t: 'path', d: 'M124 100 Q122 134 108 150 L100 150 L100 124 Z' },
+      { t: 'path', d: 'M76 100 Q78 134 92 150 L100 150 L100 124 Z' },
     ],
   },
-  { group: 'Triceps', shapes: upperArms },
-  { group: 'Core', shapes: [{ t: 'path', d: 'M88 150 Q100 146 112 150 L110 178 Q100 182 90 178 Z' }] },
+  { group: 'Triceps', shapes: arms },
+  { group: 'Core', shapes: [{ t: 'path', d: 'M94 128 Q100 126 106 128 L106 178 Q100 182 94 178 Z' }] },
   {
     group: 'Legs',
     shapes: [
-      { t: 'ellipse', cx: 116, cy: 272, rx: 13, ry: 46 },
-      { t: 'ellipse', cx: 84, cy: 272, rx: 13, ry: 46 },
+      { t: 'ellipse', cx: 112, cy: 219, rx: 12, ry: 13 },
+      { t: 'ellipse', cx: 88, cy: 219, rx: 12, ry: 13 },
+      { t: 'ellipse', cx: 116, cy: 270, rx: 14, ry: 40 },
+      { t: 'ellipse', cx: 84, cy: 270, rx: 14, ry: 40 },
     ],
   },
-]
-
-// Orientation cues drawn as thin contour lines on top of the figure so you can
-// tell front from back at a glance, independent of which muscles are colored.
-export const FRONT_DETAILS = [
-  { t: 'path', d: 'M90 84 L100 95 L110 84' }, // clavicle / sternal notch "V"
-  { t: 'line', x1: 100, y1: 96, x2: 100, y2: 172 }, // sternum + linea alba
-  { t: 'path', d: 'M97 150 Q100 154 103 150' }, // navel
-]
-export const BACK_DETAILS = [
-  { t: 'line', x1: 100, y1: 80, x2: 100, y2: 182 }, // spine
-  { t: 'path', d: 'M87 98 Q91 94 92 105' }, // left scapula
-  { t: 'path', d: 'M113 98 Q109 94 108 105' }, // right scapula
-  { t: 'line', x1: 100, y1: 210, x2: 100, y2: 232 }, // glute cleft
 ]
 
 /**
@@ -125,43 +170,49 @@ export function computeIntensities(groupVolumes) {
   return out
 }
 
-/** Fill + opacity for a region given the computed intensities. */
+/** Fill + opacity for a worked region, or null when the group wasn't trained. */
 export function regionStyle(group, intensities) {
   const ratio = intensities[group]
-  if (ratio == null) return { fill: REGION_IDLE, opacity: 0.5 }
+  if (ratio == null) return null
   const color = MUSCLE_COLORS[group] || MUSCLE_COLORS.Other
-  return { fill: color, opacity: 0.5 + 0.5 * ratio }
+  return { fill: color, opacity: 0.32 + 0.45 * ratio }
 }
 
-/** Render a shape to an SVG element string with extra attributes. */
+/** Render a fill shape (ellipse/path) to an SVG element string. */
 export function shapeToString(s, attrs = '') {
   if (s.t === 'path') return `<path d="${s.d}" ${attrs}/>`
-  if (s.t === 'line') return `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" ${attrs}/>`
   const rot = s.rot ? ` transform="rotate(${s.rot} ${s.cx} ${s.cy})"` : ''
   return `<ellipse cx="${s.cx}" cy="${s.cy}" rx="${s.rx}" ry="${s.ry}"${rot} ${attrs}/>`
 }
 
-const DETAIL_ATTRS = `fill="none" stroke="${DETAIL_STROKE}" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.8"`
-
 /**
- * Build the inner SVG markup for one figure (front or back) at native viewBox
- * coordinates. Caller wraps it in an <svg> with the right viewBox/size.
+ * Build the inner SVG markup for one figure (front or back): worked-muscle
+ * washes, then the outline + head, then the muscle contour lines on top.
  */
 export function figureMarkup(view, intensities) {
   const regions = view === 'back' ? BACK_REGIONS : FRONT_REGIONS
-  const base = SILHOUETTE.map((s) =>
-    shapeToString(s, `fill="${BASE_FILL}" stroke="${BASE_STROKE}" stroke-width="1.5"`),
-  ).join('')
-  const muscles = regions
+  const linePathList = view === 'back' ? BACK_LINE_PATHS : FRONT_LINE_PATHS
+
+  const washes = regions
     .map((r) => {
-      const { fill, opacity } = regionStyle(r.group, intensities)
+      const style = regionStyle(r.group, intensities)
+      if (!style) return ''
       return r.shapes
-        .map((s) => shapeToString(s, `fill="${fill}" fill-opacity="${opacity}"`))
+        .map((s) => shapeToString(s, `fill="${style.fill}" fill-opacity="${style.opacity}"`))
         .join('')
     })
     .join('')
-  const details = (view === 'back' ? BACK_DETAILS : FRONT_DETAILS)
-    .map((s) => shapeToString(s, DETAIL_ATTRS))
+
+  const body =
+    `<path d="${BODY_OUTLINE}" fill="none" stroke="${OUTLINE_STROKE}" stroke-width="${OUTLINE_WIDTH}"/>` +
+    `<path d="${HEAD_PATH}" fill="none" stroke="${OUTLINE_STROKE}" stroke-width="${OUTLINE_WIDTH}"/>`
+
+  const lines = linePathList
+    .map(
+      (d) =>
+        `<path d="${d}" fill="none" stroke="${LINE_STROKE}" stroke-width="${LINE_WIDTH}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.9"/>`,
+    )
     .join('')
-  return base + muscles + details
+
+  return washes + body + lines
 }
