@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useMemo, useReducer, useRe
 import { emptyState, loadState, saveState, SCHEMA_VERSION } from '../lib/persistence.js'
 import { seedMachines } from '../data/seed.js'
 import { uid } from '../lib/id.js'
-import { todayISO, epley1RM, setVolume } from '../lib/metrics.js'
+import { todayISO, epley1RM, setVolume, prSessionsForMachine } from '../lib/metrics.js'
+import { computeIntensities } from '../lib/bodyMap.js'
 import * as idb from '../lib/idb.js'
 
 // ---- Reducer -------------------------------------------------------------
@@ -300,6 +301,85 @@ export function StoreProvider({ children }) {
             machines,
             totals: { machines: machines.length, sets: totalSets, volume: totalVolume },
           },
+        }
+      },
+
+      /**
+       * Build a rich summary for a single day used by the visual workout
+       * summary (body muscle map + stats). Returns null if the day has no sets.
+       */
+      buildDaySummary(date) {
+        const workout = state.workouts.find((w) => w.date === date)
+        if (!workout) return null
+        const daySets = state.sets.filter((s) => s.workoutId === workout.id)
+        if (!daySets.length) return null
+
+        const machineById = new Map(state.machines.map((m) => [m.id, m]))
+        const byMachine = new Map()
+        for (const s of daySets) {
+          if (!byMachine.has(s.machineId)) byMachine.set(s.machineId, [])
+          byMachine.get(s.machineId).push(s)
+        }
+
+        const groupVolumes = {}
+        let totalVolume = 0
+        let prs = 0
+        const machines = []
+        for (const [machineId, sets] of byMachine) {
+          const m = machineById.get(machineId)
+          const group = m?.muscleGroup || 'Other'
+          const ordered = [...sets].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          let topSetWeight = 0
+          let best1RM = 0
+          let volume = 0
+          for (const s of ordered) {
+            topSetWeight = Math.max(topSetWeight, Number(s.weight) || 0)
+            best1RM = Math.max(best1RM, epley1RM(s.weight, s.reps))
+            volume += setVolume(s)
+          }
+          groupVolumes[group] = (groupVolumes[group] || 0) + volume
+          totalVolume += volume
+
+          const prFlags = prSessionsForMachine(machineId, state.workouts, state.sets).get(
+            workout.id,
+          )
+          const isPR = Boolean(prFlags && (prFlags.weightPR || prFlags.oneRmPR))
+          if (isPR) prs++
+
+          machines.push({
+            id: machineId,
+            name: m?.name || 'Unknown machine',
+            model: m?.model || '',
+            muscleGroup: group,
+            sets: ordered.map((s) => ({ weight: s.weight, reps: s.reps })),
+            topSetWeight,
+            best1RM,
+            volume,
+            isPR,
+          })
+        }
+
+        machines.sort((a, b) => b.volume - a.volume)
+        const groups = Object.entries(groupVolumes)
+          .map(([group, volume]) => ({
+            group,
+            volume,
+            share: totalVolume ? volume / totalVolume : 0,
+          }))
+          .sort((a, b) => b.volume - a.volume)
+
+        return {
+          date,
+          unit: state.settings.unit,
+          stats: {
+            machines: machines.length,
+            sets: daySets.length,
+            volume: totalVolume,
+            prs,
+          },
+          machines,
+          groups,
+          intensities: computeIntensities(groupVolumes),
         }
       },
 

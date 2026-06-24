@@ -9,6 +9,7 @@ import NumberStepper from '../components/NumberStepper.jsx'
 import MuscleChip from '../components/MuscleChip.jsx'
 import Modal from '../components/Modal.jsx'
 import MachinePhoto from '../components/MachinePhoto.jsx'
+import SummaryModal from '../components/SummaryModal.jsx'
 import {
   IconPlus,
   IconTrash,
@@ -18,6 +19,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconDownload,
+  IconChart,
 } from '../components/Icons.jsx'
 
 export default function LogWorkout({ date: routeDate }) {
@@ -27,6 +29,7 @@ export default function LogWorkout({ date: routeDate }) {
 
   const [date, setDate] = useState(routeDate || todayISO())
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [summaryOpen, setSummaryOpen] = useState(false)
   // Machines explicitly added to this session that don't yet have sets.
   const [addedMachineIds, setAddedMachineIds] = useState([])
 
@@ -77,6 +80,11 @@ export default function LogWorkout({ date: routeDate }) {
     if (!payload) return
     downloadJSON(`weight-room-${date}.json`, payload)
   }
+
+  const daySummary = useMemo(
+    () => (summaryOpen ? store.buildDaySummary(date) : null),
+    [summaryOpen, date, store],
+  )
 
   const machineById = useMemo(
     () => new Map(state.machines.map((m) => [m.id, m])),
@@ -144,10 +152,17 @@ export default function LogWorkout({ date: routeDate }) {
       </button>
 
       {todaysSets.length > 0 && (
-        <button className="btn-ghost w-full mt-2" onClick={exportThisWorkout}>
-          <IconDownload size={20} /> Export this day
-        </button>
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <button className="btn-ghost" onClick={() => setSummaryOpen(true)}>
+            <IconChart size={20} /> Summary
+          </button>
+          <button className="btn-ghost" onClick={exportThisWorkout}>
+            <IconDownload size={20} /> Export JSON
+          </button>
+        </div>
       )}
+
+      <SummaryModal open={summaryOpen} onClose={() => setSummaryOpen(false)} summary={daySummary} />
 
       <MachinePicker
         open={pickerOpen}
