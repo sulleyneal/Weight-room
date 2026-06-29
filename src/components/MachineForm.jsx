@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MUSCLE_GROUPS } from '../data/seed.js'
+import { MUSCLE_GROUPS, EQUIPMENT_TYPES } from '../data/seed.js'
 import { useStore } from '../store/StoreContext.jsx'
 import { useMachinePhoto } from '../hooks/useMachinePhoto.js'
 import PhotoInput from './PhotoInput.jsx'
@@ -19,10 +19,10 @@ export default function MachineForm({ open, onClose, machine }) {
   const [photo, setPhoto] = useState(null)
 
   function blank() {
-    return { name: '', model: '', muscleGroup: 'Chest', notes: '' }
+    return { name: '', model: '', muscleGroup: 'Chest', type: 'Machine', notes: '' }
   }
 
-  // Reset form whenever the modal opens for a (possibly different) machine.
+  // Reset form whenever the modal opens for a (possibly different) exercise.
   useEffect(() => {
     if (!open) return
     if (machine) {
@@ -30,6 +30,7 @@ export default function MachineForm({ open, onClose, machine }) {
         name: machine.name || '',
         model: machine.model || '',
         muscleGroup: machine.muscleGroup || 'Chest',
+        type: machine.type || 'Machine',
         notes: machine.notes || '',
       })
     } else {
@@ -50,9 +51,10 @@ export default function MachineForm({ open, onClose, machine }) {
   async function handleSave() {
     if (editing) {
       updateMachine(machine.id, {
-        name: form.name.trim() || 'Untitled Machine',
+        name: form.name.trim() || 'Untitled Exercise',
         model: form.model.trim(),
         muscleGroup: form.muscleGroup,
+        type: form.type,
         notes: form.notes.trim(),
       })
       // Reconcile photo changes.
@@ -71,23 +73,25 @@ export default function MachineForm({ open, onClose, machine }) {
     <Modal
       open={open}
       onClose={onClose}
-      title={editing ? 'Edit machine' : 'Add machine'}
+      title={editing ? 'Edit exercise' : 'Add exercise'}
       footer={
         <div className="flex gap-3">
           <button className="btn-ghost flex-1" onClick={onClose}>
             Cancel
           </button>
           <button className="btn-primary flex-1" onClick={handleSave}>
-            {editing ? 'Save' : 'Add machine'}
+            {editing ? 'Save' : 'Add exercise'}
           </button>
         </div>
       }
     >
       <div className="space-y-4">
         <div>
-          <span className="label">Placard photo</span>
+          <span className="label">Photo {form.type === 'Machine' ? '(placard)' : '(optional)'}</span>
           <p className="text-xs text-slate-500 mb-2 -mt-1">
-            Snap the model badge / instruction label, then fill in the details below.
+            {form.type === 'Machine'
+              ? 'Snap the model badge / instruction label, then fill in the details below.'
+              : 'Optional — a photo of the setup or your grip, if useful.'}
           </p>
           <PhotoInput value={photo} onChange={setPhoto} />
         </div>
@@ -99,15 +103,35 @@ export default function MachineForm({ open, onClose, machine }) {
           <input
             id="mf-name"
             className="input"
-            placeholder="e.g. Chest Press"
+            placeholder="e.g. Chest Press, Barbell Bench, Pull-up"
             value={form.name}
             onChange={(e) => update('name', e.target.value)}
           />
         </div>
 
         <div>
+          <span className="label">Equipment</span>
+          <div className="flex flex-wrap gap-2">
+            {EQUIPMENT_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => update('type', t)}
+                className={`chip px-3 py-2 border ${
+                  form.type === t
+                    ? 'bg-brand-500 text-white border-brand-500'
+                    : 'bg-ink-700 text-slate-300 border-ink-600'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
           <label className="label" htmlFor="mf-model">
-            Model number
+            Model number {form.type === 'Machine' ? '' : '(optional)'}
           </label>
           <input
             id="mf-model"

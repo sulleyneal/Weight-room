@@ -49,8 +49,8 @@ export default function MachineDetail({ id }) {
   if (!machine) {
     return (
       <div>
-        <PageHeader title="Machine" back="/machines" />
-        <div className="card p-8 text-center text-slate-400">This machine no longer exists.</div>
+        <PageHeader title="Exercise" back="/machines" />
+        <div className="card p-8 text-center text-slate-400">This exercise no longer exists.</div>
       </div>
     )
   }
@@ -77,7 +77,7 @@ export default function MachineDetail({ id }) {
   function handleDelete() {
     if (
       confirm(
-        `Delete "${machine.name}"? This removes the machine and all its logged sets. This cannot be undone.`,
+        `Delete "${machine.name}"? This removes the exercise and all its logged sets. This cannot be undone.`,
       )
     ) {
       deleteMachine(machine.id)
@@ -89,7 +89,7 @@ export default function MachineDetail({ id }) {
     <div>
       <PageHeader
         title={machine.name}
-        subtitle={machine.model || 'No model #'}
+        subtitle={machine.model || machine.type || 'Exercise'}
         back="/machines"
         action={
           <div className="flex gap-2">
@@ -115,7 +115,7 @@ export default function MachineDetail({ id }) {
       </div>
 
       <button className="btn-primary w-full mb-4" onClick={() => navigate('/log')}>
-        <IconPlus size={20} /> Log a set on this machine
+        <IconPlus size={20} /> Log a set on this exercise
       </button>
 
       {/* All-time stats */}

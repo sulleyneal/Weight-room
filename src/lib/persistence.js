@@ -14,10 +14,10 @@ export const SCHEMA_VERSION = 1
 export function emptyState() {
   return {
     schemaVersion: SCHEMA_VERSION,
-    machines: [], // { id, name, model, muscleGroup, notes, hasPhoto, archived, createdAt }
+    machines: [], // { id, name, model, muscleGroup, type, notes, hasPhoto, archived, createdAt }
     workouts: [], // { id, date }  (date = 'YYYY-MM-DD')
     sets: [], // { id, workoutId, machineId, weight, reps, order }
-    settings: { unit: 'lbs' },
+    settings: { unit: 'lbs', bodyweight: 0 },
   }
 }
 
@@ -58,7 +58,8 @@ function migrate(state) {
     ...base,
     ...state,
     settings: { ...base.settings, ...(state.settings || {}) },
-    machines: state.machines || [],
+    // Backfill equipment type for entries created before it existed.
+    machines: (state.machines || []).map((m) => ({ type: 'Machine', ...m })),
     workouts: state.workouts || [],
     sets: state.sets || [],
   }

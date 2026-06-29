@@ -127,8 +127,8 @@ export default function LogWorkout({ date: routeDate }) {
 
       {sessionMachineIds.length === 0 && (
         <div className="card p-8 text-center mb-4">
-          <p className="text-slate-400 mb-1">No machines yet for this day.</p>
-          <p className="text-slate-500 text-sm mb-4">Add a machine to start logging sets.</p>
+          <p className="text-slate-400 mb-1">No exercises yet for this day.</p>
+          <p className="text-slate-500 text-sm mb-4">Add an exercise to start logging sets.</p>
         </div>
       )}
 
@@ -149,7 +149,7 @@ export default function LogWorkout({ date: routeDate }) {
       </div>
 
       <button className="btn-primary w-full mt-4" onClick={() => setPickerOpen(true)}>
-        <IconPlus size={20} /> Add machine
+        <IconPlus size={20} /> Add exercise
       </button>
 
       {todaysSets.length > 0 && (
@@ -217,7 +217,12 @@ function MachineBlock({ machine, date, unit, store }) {
   const lastTodaySet = sets[sets.length - 1] || null
   const seedSet = lastTodaySet || lastEverSet
 
-  const [weight, setWeight] = useState(seedSet?.weight ?? (unit === 'kg' ? 20 : 45))
+  const isBodyweight = machine.type === 'Bodyweight'
+  const bodyweight = state.settings.bodyweight || 0
+  const defaultWeight =
+    seedSet?.weight ?? (isBodyweight && bodyweight > 0 ? bodyweight : unit === 'kg' ? 20 : 45)
+
+  const [weight, setWeight] = useState(defaultWeight)
   const [reps, setReps] = useState(seedSet?.reps ?? 10)
 
   function addSet() {
@@ -237,7 +242,7 @@ function MachineBlock({ machine, date, unit, store }) {
   function copyLastWorkout() {
     const workoutId = store.ensureWorkout(date)
     const n = store.copyLastWorkoutForMachine(machine.id, workoutId)
-    if (n === 0) alert('No previous session found for this machine.')
+    if (n === 0) alert('No previous session found for this exercise.')
   }
 
   const volume = sets.reduce((sum, s) => sum + s.weight * s.reps, 0)
@@ -253,7 +258,7 @@ function MachineBlock({ machine, date, unit, store }) {
         <MachinePhoto machine={machine} className="w-12 h-12 shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="font-bold truncate">{machine.name}</div>
-          <div className="text-xs text-slate-400 truncate">{machine.model}</div>
+          <div className="text-xs text-slate-400 truncate">{machine.model || machine.type}</div>
         </div>
         <MuscleChip group={machine.muscleGroup} />
       </button>
@@ -304,7 +309,7 @@ function MachineBlock({ machine, date, unit, store }) {
         )}
         <div className="space-y-3">
           <NumberStepper
-            label={`Weight (${unitLabel(unit)})`}
+            label={isBodyweight ? `Weight incl. body (${unitLabel(unit)})` : `Weight (${unitLabel(unit)})`}
             value={weight}
             onChange={setWeight}
             step={weightStep(unit)}
@@ -413,10 +418,10 @@ function MachinePicker({ open, onClose, machines, excludeIds, onPick }) {
     .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
-    <Modal open={open} onClose={onClose} title="Add machine to session">
+    <Modal open={open} onClose={onClose} title="Add exercise to session">
       <input
         className="input mb-3"
-        placeholder="Search machines…"
+        placeholder="Search exercises…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         autoFocus
@@ -424,8 +429,8 @@ function MachinePicker({ open, onClose, machines, excludeIds, onPick }) {
       {list.length === 0 ? (
         <p className="text-slate-500 text-center py-8 text-sm">
           {machines.length === 0
-            ? 'No machines in your library yet.'
-            : 'All machines are already in this session.'}
+            ? 'No exercises in your library yet.'
+            : 'All exercises are already in this session.'}
         </p>
       ) : (
         <div className="space-y-2">
@@ -438,7 +443,7 @@ function MachinePicker({ open, onClose, machines, excludeIds, onPick }) {
               <MachinePhoto machine={m} className="w-11 h-11 shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold truncate">{m.name}</div>
-                <div className="text-xs text-slate-400 truncate">{m.model}</div>
+                <div className="text-xs text-slate-400 truncate">{m.model || m.type}</div>
               </div>
               <MuscleChip group={m.muscleGroup} />
             </button>

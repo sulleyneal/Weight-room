@@ -5,7 +5,7 @@ const items = [
   { path: '/', label: 'Home', icon: IconHome, match: (p) => p === '/' },
   {
     path: '/machines',
-    label: 'Machines',
+    label: 'Exercises',
     icon: IconDumbbell,
     match: (p) => p.startsWith('/machines') || p.startsWith('/machine/'),
   },

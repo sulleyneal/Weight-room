@@ -23,8 +23,9 @@ export default function MachinesPage() {
         const q = query.toLowerCase()
         return (
           m.name.toLowerCase().includes(q) ||
-          m.model.toLowerCase().includes(q) ||
-          m.muscleGroup.toLowerCase().includes(q)
+          (m.model || '').toLowerCase().includes(q) ||
+          m.muscleGroup.toLowerCase().includes(q) ||
+          (m.type || '').toLowerCase().includes(q)
         )
       })
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -33,7 +34,7 @@ export default function MachinesPage() {
   return (
     <div>
       <PageHeader
-        title="Machines"
+        title="Exercises"
         subtitle={`${state.machines.length} in your library`}
         action={
           <button className="btn-primary px-3" onClick={() => setAdding(true)}>
@@ -44,7 +45,7 @@ export default function MachinesPage() {
 
       <input
         className="input mb-3"
-        placeholder="Search name, model, muscle…"
+        placeholder="Search name, model, muscle, equipment…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
@@ -79,10 +80,13 @@ export default function MachinesPage() {
               <div className="flex-1 min-w-0">
                 <div className="font-bold truncate">{m.name}</div>
                 <div className="text-sm text-slate-400 truncate">
-                  {m.model || 'No model #'}
+                  {m.model || m.type || 'Exercise'}
                 </div>
-                <div className="mt-1">
+                <div className="mt-1 flex items-center gap-2">
                   <MuscleChip group={m.muscleGroup} />
+                  {m.type && m.type !== 'Machine' && (
+                    <span className="text-[11px] text-slate-500">{m.type}</span>
+                  )}
                 </div>
               </div>
               <IconChevronRight size={20} className="text-slate-500 shrink-0" />
@@ -105,9 +109,9 @@ export default function MachinesPage() {
 function EmptyState({ onAdd }) {
   return (
     <div className="card p-8 text-center">
-      <p className="text-slate-400 mb-4">No machines match your filters.</p>
+      <p className="text-slate-400 mb-4">No exercises match your filters.</p>
       <button className="btn-primary mx-auto" onClick={onAdd}>
-        <IconPlus size={20} /> Add a machine
+        <IconPlus size={20} /> Add an exercise
       </button>
     </div>
   )

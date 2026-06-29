@@ -74,6 +74,9 @@ function reducer(state, action) {
     case 'SET_UNIT':
       return { ...state, settings: { ...state.settings, unit: action.unit } }
 
+    case 'SET_SETTING':
+      return { ...state, settings: { ...state.settings, [action.key]: action.value } }
+
     case 'REPLACE_ALL':
       return { ...action.payload, loaded: true }
 
@@ -116,14 +119,15 @@ export function StoreProvider({ children }) {
   // ---- Actions (memoized) ----
   const actions = useMemo(() => {
     return {
-      // Machines
-      addMachine({ name, model, muscleGroup, notes }, photoDataUrl) {
+      // Exercises (machines, free weights, bodyweight…)
+      addMachine({ name, model, muscleGroup, type, notes }, photoDataUrl) {
         const id = uid('m')
         const machine = {
           id,
-          name: name?.trim() || 'Untitled Machine',
+          name: name?.trim() || 'Untitled Exercise',
           model: model?.trim() || '',
           muscleGroup: muscleGroup || 'Other',
+          type: type || 'Machine',
           notes: notes?.trim() || '',
           hasPhoto: false,
           archived: false,
@@ -238,6 +242,10 @@ export function StoreProvider({ children }) {
       // Settings
       setUnit(unit) {
         dispatch({ type: 'SET_UNIT', unit })
+      },
+
+      setBodyweight(value) {
+        dispatch({ type: 'SET_SETTING', key: 'bodyweight', value: Number(value) || 0 })
       },
 
       /**

@@ -11,6 +11,11 @@ export const MUSCLE_GROUPS = [
   'Core',
 ]
 
+// Equipment types. Everything is logged as weight x reps; "Bodyweight" just
+// means the weight field represents total/added load (prefilled from the
+// optional body-weight setting). "Machine" is the default for seeded entries.
+export const EQUIPMENT_TYPES = ['Machine', 'Barbell', 'Dumbbell', 'Cable', 'Bodyweight', 'Other']
+
 // Color per muscle group (Tailwind-ish hex) for chips and the split chart.
 export const MUSCLE_COLORS = {
   Chest: '#f97316',
@@ -101,6 +106,7 @@ export function seedMachines() {
     name: m.name,
     model: m.model,
     muscleGroup: m.muscleGroup,
+    type: 'Machine',
     notes: m.notes,
     hasPhoto: false,
     archived: false,

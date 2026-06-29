@@ -6,7 +6,7 @@ import PageHeader from '../components/PageHeader.jsx'
 import { IconImage, IconTrash, IconDownload } from '../components/Icons.jsx'
 
 export default function SettingsPage() {
-  const { state, setUnit, exportData, importData, importWorkout, resetAll, loadSampleHistory } =
+  const { state, setUnit, setBodyweight, exportData, importData, importWorkout, resetAll, loadSampleHistory } =
     useStore()
   const fileRef = useRef(null)
   const dayFileRef = useRef(null)
@@ -133,6 +133,25 @@ export default function SettingsPage() {
         <p className="text-xs text-slate-500 mt-2 px-1">
           Weights you log are stored as entered and displayed in {unitLabel(state.settings.unit)}.
         </p>
+
+        <div className="card p-4 mt-3">
+          <label className="label" htmlFor="set-bw">
+            Body weight ({unitLabel(state.settings.unit)})
+          </label>
+          <input
+            id="set-bw"
+            type="number"
+            inputMode="decimal"
+            className="input"
+            placeholder="optional"
+            value={state.settings.bodyweight || ''}
+            onChange={(e) => setBodyweight(e.target.value)}
+          />
+          <p className="text-xs text-slate-500 mt-2">
+            Used to prefill the weight on bodyweight exercises (pull-ups, dips…). Leave blank to
+            skip.
+          </p>
+        </div>
       </section>
 
       {/* Data */}
@@ -141,7 +160,7 @@ export default function SettingsPage() {
         <div className="card divide-y divide-ink-700">
           <Row
             title="Library summary"
-            desc={`${machineCount} machines · ${workoutCount} workouts · ${setCount} sets`}
+            desc={`${machineCount} exercises · ${workoutCount} workouts · ${setCount} sets`}
           />
           <button className="w-full p-4 text-left hover:bg-ink-700/50 transition" onClick={handleExport}>
             <div className="font-semibold">Export backup (JSON)</div>
