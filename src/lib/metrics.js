@@ -145,53 +145,79 @@ export function weekStartISO(iso) {
   return new Date(ws.getTime() - tz * 60000).toISOString().slice(0, 10)
 }
 
+/** ISO date `n` days after `iso` (local). */
+export function addDaysISO(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() + n)
+  const tz = dt.getTimezoneOffset()
+  return new Date(dt.getTime() - tz * 60000).toISOString().slice(0, 10)
+}
+
 /**
- * Normalized strength-progress trend per muscle group, for the overall chart.
+ * Training-load "activity path": acute training load vs an optimal band derived
+ * from chronic load — so you can see whether you're under-training (below the
+ * band), in the productive zone, or pushing too hard (above it).
  *
- * For each ISO week, takes the best estimated 1RM across that group's exercises,
- * carries the last known value forward through untrained weeks, and indexes each
- * group to 100 at its first data point — so every line shares one axis and you
- * can see at a glance which groups are climbing vs falling behind.
+ * - Daily load = total volume (Σ weight×reps) that day, optionally filtered to a
+ *   muscle group.
+ * - acute = ~7-day EWMA of daily load (the plotted line).
+ * - chronic = ~28-day EWMA (the baseline the band is built from).
+ * - band = [chronic × 0.8, chronic × 1.3] (the green "optimal" range).
  *
- * Returns { weeks, groups, rows } where rows are Recharts-ready:
- *   [{ week: '2026-06-01', Chest: 100, Back: 108, ... }, ...]
+ * Both EWMAs seed to the window's mean daily load so the band is stable from the
+ * first point. Computed over the last ~120 days. Returns Recharts-ready rows
+ * plus the latest status ('low' | 'optimal' | 'high').
  */
-export function muscleProgressSeries(machines, workouts, sets) {
+export function trainingLoadSeries(machines, workouts, sets, group = 'All') {
   const groupOf = new Map(machines.map((m) => [m.id, m.muscleGroup || 'Other']))
   const dateOf = new Map(workouts.map((w) => [w.id, w.date]))
 
-  const byWeek = new Map() // weekISO -> Map(group -> best e1RM that week)
+  const daily = new Map() // iso -> volume
+  let minDate = null
   for (const s of sets) {
     const date = dateOf.get(s.workoutId)
     if (!date) continue
-    const e = epley1RM(s.weight, s.reps)
-    if (e <= 0) continue
-    const wk = weekStartISO(date)
-    const group = groupOf.get(s.machineId) || 'Other'
-    if (!byWeek.has(wk)) byWeek.set(wk, new Map())
-    const gm = byWeek.get(wk)
-    gm.set(group, Math.max(gm.get(group) || 0, e))
+    if (group !== 'All' && (groupOf.get(s.machineId) || 'Other') !== group) continue
+    daily.set(date, (daily.get(date) || 0) + setVolume(s))
+    if (!minDate || date < minDate) minDate = date
   }
+  if (!minDate) return { rows: [], status: null, last: null }
 
-  const weeks = [...byWeek.keys()].sort()
-  const groups = [...new Set(weeks.flatMap((w) => [...byWeek.get(w).keys()]))]
-  const lastVal = {}
-  const baseline = {}
-  const rows = weeks.map((wk) => {
-    const row = { week: wk }
-    const gm = byWeek.get(wk)
-    for (const g of groups) {
-      if (gm.has(g)) lastVal[g] = gm.get(g)
-      const v = lastVal[g]
-      if (v == null) {
-        row[g] = null
-        continue
-      }
-      if (baseline[g] == null) baseline[g] = v
-      row[g] = Math.round((v / baseline[g]) * 100)
+  const end = todayISO()
+  const windowStart = addDaysISO(end, -120)
+  const start = minDate > windowStart ? minDate : windowStart
+
+  const days = []
+  for (let d = start; d <= end; d = addDaysISO(d, 1)) days.push(d)
+  const vols = days.map((d) => daily.get(d) || 0)
+  const mean = vols.length ? vols.reduce((a, b) => a + b, 0) / vols.length : 0
+
+  const aAlpha = 2 / (7 + 1)
+  const cAlpha = 2 / (28 + 1)
+  let acute = mean
+  let chronic = mean
+  const rows = days.map((d, i) => {
+    const v = vols[i]
+    acute += aAlpha * (v - acute)
+    chronic += cAlpha * (v - chronic)
+    const low = chronic * 0.8
+    const high = chronic * 1.3
+    return {
+      date: d,
+      label: fmtDateShort(d),
+      acute: Math.round(acute),
+      low: Math.round(low),
+      high: Math.round(high),
+      span: Math.max(0, Math.round(high - low)),
     }
-    return row
   })
 
-  return { weeks, groups, rows }
+  const last = rows[rows.length - 1]
+  let status = 'optimal'
+  if (last) {
+    if (last.acute > last.high) status = 'high'
+    else if (last.acute < last.low) status = 'low'
+  }
+  return { rows, status, last }
 }

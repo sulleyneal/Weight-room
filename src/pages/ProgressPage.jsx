@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react'
 import {
   ResponsiveContainer,
-  LineChart,
+  ComposedChart,
+  Area,
   Line,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
-  ReferenceLine,
 } from 'recharts'
 import { useStore } from '../store/StoreContext.jsx'
-import { sessionsForMachine, muscleProgressSeries, fmtDate, fmtDateShort } from '../lib/metrics.js'
-import { fmtWeight } from '../lib/units.js'
+import { sessionsForMachine, trainingLoadSeries, fmtDate } from '../lib/metrics.js'
+import { fmtWeight, fmtNumber } from '../lib/units.js'
 import { MUSCLE_GROUPS, MUSCLE_COLORS } from '../data/seed.js'
 import { navigate } from '../router.jsx'
 import PageHeader from '../components/PageHeader.jsx'
@@ -19,26 +19,34 @@ import MachinePhoto from '../components/MachinePhoto.jsx'
 import MuscleChip from '../components/MuscleChip.jsx'
 import { IconChevronRight } from '../components/Icons.jsx'
 
+const STATUS = {
+  low: {
+    label: 'Backing off',
+    color: '#38bdf8',
+    blurb: 'Your recent load is below your usual range — room to push, or a planned deload.',
+  },
+  optimal: {
+    label: 'On track',
+    color: '#22c55e',
+    blurb: 'Your training load is in the productive zone. Keep it rolling.',
+  },
+  high: {
+    label: 'Pushing hard',
+    color: '#fb923c',
+    blurb: 'Recent load is above your baseline — great for a push, watch recovery.',
+  },
+}
+
 export default function ProgressPage() {
   const { state } = useStore()
   const unit = state.settings.unit
-  const [group, setGroup] = useState('All') // 'All' or a muscle group
+  const [group, setGroup] = useState('All')
   const [query, setQuery] = useState('')
 
-  const trend = useMemo(
-    () => muscleProgressSeries(state.machines, state.workouts, state.sets),
-    [state.machines, state.workouts, state.sets],
+  const load = useMemo(
+    () => trainingLoadSeries(state.machines, state.workouts, state.sets, group),
+    [state.machines, state.workouts, state.sets, group],
   )
-
-  // Groups to draw: all that have data, or just the selected one.
-  const drawnGroups = useMemo(() => {
-    if (group !== 'All') return trend.groups.includes(group) ? [group] : []
-    return trend.groups
-  }, [trend.groups, group])
-
-  const rows = useMemo(() => trend.rows.map((r) => ({ ...r, label: fmtDateShort(r.week) })), [
-    trend.rows,
-  ])
 
   const exerciseRows = useMemo(() => {
     return state.machines
@@ -57,7 +65,10 @@ export default function ProgressPage() {
       .filter((r) => {
         if (!query.trim()) return true
         const q = query.toLowerCase()
-        return r.machine.name.toLowerCase().includes(q) || (r.machine.model || '').toLowerCase().includes(q)
+        return (
+          r.machine.name.toLowerCase().includes(q) ||
+          (r.machine.model || '').toLowerCase().includes(q)
+        )
       })
       .sort((a, b) => {
         if (!!a.last !== !!b.last) return a.last ? -1 : 1
@@ -66,18 +77,31 @@ export default function ProgressPage() {
       })
   }, [state.machines, state.workouts, state.sets, group, query])
 
-  const hasTrend = rows.length >= 2 && drawnGroups.length > 0
+  const hasLoad = load.rows.length >= 5
+  const status = load.status ? STATUS[load.status] : null
 
   return (
     <div>
-      <PageHeader title="Progress" subtitle="Strength trend vs your starting point" />
+      <PageHeader title="Progress" subtitle="Your training-load path" />
 
-      {/* Overall trend chart */}
-      {hasTrend ? (
+      {hasLoad ? (
         <div className="card p-3 pr-4 mb-3">
-          <div className="h-64">
+          {status && (
+            <div className="flex items-center justify-between px-1 mb-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: status.color }} />
+                <span className="font-bold" style={{ color: status.color }}>
+                  {status.label}
+                </span>
+              </div>
+              <span className="text-xs text-slate-500">
+                {group === 'All' ? 'All training' : group}
+              </span>
+            </div>
+          )}
+          <div className="h-60">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={rows} margin={{ top: 8, right: 6, left: -12, bottom: 0 }}>
+              <ComposedChart data={load.rows} margin={{ top: 8, right: 6, left: -16, bottom: 0 }}>
                 <CartesianGrid stroke="#26304a" strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -85,16 +109,9 @@ export default function ProgressPage() {
                   tickLine={false}
                   axisLine={{ stroke: '#26304a' }}
                   interval="preserveStartEnd"
-                  minTickGap={24}
+                  minTickGap={28}
                 />
-                <YAxis
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={40}
-                  domain={['auto', 'auto']}
-                  tickFormatter={(v) => `${v}%`}
-                />
+                <YAxis hide domain={[0, 'auto']} />
                 <Tooltip
                   contentStyle={{
                     background: '#111726',
@@ -103,36 +120,44 @@ export default function ProgressPage() {
                     color: '#e2e8f0',
                   }}
                   labelStyle={{ color: '#94a3b8' }}
-                  formatter={(value, name) => [`${value}%`, name]}
+                  formatter={(value, name) => {
+                    if (name === 'Load') return [`${fmtNumber(value)} ${unit}`, 'Load']
+                    return null
+                  }}
                 />
-                <ReferenceLine y={100} stroke="#475569" strokeDasharray="4 4" />
-                {drawnGroups.map((g) => (
-                  <Line
-                    key={g}
-                    type="monotone"
-                    dataKey={g}
-                    stroke={MUSCLE_COLORS[g] || MUSCLE_COLORS.Other}
-                    strokeWidth={2.5}
-                    dot={false}
-                    connectNulls
-                    isAnimationActive={false}
-                  />
-                ))}
-              </LineChart>
+                {/* Optimal band = invisible base (low) + green span up to high */}
+                <Area dataKey="low" stackId="band" stroke="none" fill="none" isAnimationActive={false} />
+                <Area
+                  dataKey="span"
+                  stackId="band"
+                  stroke="none"
+                  fill="#22c55e"
+                  fillOpacity={0.18}
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="acute"
+                  name="Load"
+                  stroke="#e2e8f0"
+                  strokeWidth={2.5}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
           <p className="text-[11px] text-slate-500 mt-1 px-1">
-            Each line = best est. 1RM for that muscle group, indexed to 100% at its first session.
-            Above 100% = stronger than you started; flat or dipping = falling behind.
+            {status?.blurb} The green band is your productive range; the line is your recent load.
           </p>
         </div>
       ) : (
         <div className="card p-6 text-center text-slate-400 mb-3">
-          Log a couple of sessions to see your strength trend across muscle groups.
+          Log a couple weeks of workouts to see your training-load path.
         </div>
       )}
 
-      {/* Muscle-group filter (doubles as the chart legend) */}
+      {/* Muscle-group filter (recomputes the path for that group) */}
       <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 mb-3">
         {['All', ...MUSCLE_GROUPS].map((g) => {
           const active = group === g
@@ -184,7 +209,9 @@ export default function ProgressPage() {
               )}
               <div className="mt-1 flex items-center gap-2">
                 <MuscleChip group={machine.muscleGroup} />
-                {sessions > 0 && <span className="text-[11px] text-slate-500">{sessions} sessions</span>}
+                {sessions > 0 && (
+                  <span className="text-[11px] text-slate-500">{sessions} sessions</span>
+                )}
                 {Math.abs(delta) > 0.05 && (
                   <span
                     className={`text-[11px] font-semibold ${
