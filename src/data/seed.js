@@ -99,6 +99,32 @@ const SEED = [
   },
 ]
 
+// Common free-weight & bodyweight movements, addable on top of the HOIST
+// machine library (Settings → "Add common exercises"). Logged as weight x reps
+// like everything else.
+export const COMMON_EXERCISES = [
+  { name: 'Barbell Bench Press', muscleGroup: 'Chest', type: 'Barbell' },
+  { name: 'Incline Dumbbell Press', muscleGroup: 'Chest', type: 'Dumbbell' },
+  { name: 'Barbell Back Squat', muscleGroup: 'Legs', type: 'Barbell' },
+  { name: 'Barbell Deadlift', muscleGroup: 'Back', type: 'Barbell' },
+  { name: 'Romanian Deadlift', muscleGroup: 'Legs', type: 'Barbell' },
+  { name: 'Barbell Row', muscleGroup: 'Back', type: 'Barbell' },
+  { name: 'Overhead Press', muscleGroup: 'Shoulders', type: 'Barbell' },
+  { name: 'Dumbbell Shoulder Press', muscleGroup: 'Shoulders', type: 'Dumbbell' },
+  { name: 'Lateral Raise', muscleGroup: 'Shoulders', type: 'Dumbbell' },
+  { name: 'Dumbbell Curl', muscleGroup: 'Biceps', type: 'Dumbbell' },
+  { name: 'Barbell Curl', muscleGroup: 'Biceps', type: 'Barbell' },
+  { name: 'Triceps Pushdown', muscleGroup: 'Triceps', type: 'Cable' },
+  { name: 'Walking Lunge', muscleGroup: 'Legs', type: 'Dumbbell' },
+  { name: 'Hip Thrust', muscleGroup: 'Legs', type: 'Barbell' },
+  { name: 'Pull-up', muscleGroup: 'Back', type: 'Bodyweight' },
+  { name: 'Chin-up', muscleGroup: 'Biceps', type: 'Bodyweight' },
+  { name: 'Push-up', muscleGroup: 'Chest', type: 'Bodyweight' },
+  { name: 'Dip', muscleGroup: 'Triceps', type: 'Bodyweight' },
+  { name: 'Plank', muscleGroup: 'Core', type: 'Bodyweight' },
+  { name: 'Hanging Leg Raise', muscleGroup: 'Core', type: 'Bodyweight' },
+]
+
 export function seedMachines() {
   const now = Date.now()
   return SEED.map((m, i) => ({

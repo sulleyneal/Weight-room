@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
 import { emptyState, loadState, saveState, SCHEMA_VERSION } from '../lib/persistence.js'
-import { seedMachines } from '../data/seed.js'
+import { seedMachines, COMMON_EXERCISES } from '../data/seed.js'
 import { uid } from '../lib/id.js'
 import { todayISO, epley1RM, setVolume, prSessionsForMachine } from '../lib/metrics.js'
 import { computeIntensities } from '../lib/bodyMap.js'
@@ -15,6 +15,9 @@ function reducer(state, action) {
 
     case 'ADD_MACHINE':
       return { ...state, machines: [...state.machines, action.machine] }
+
+    case 'ADD_MACHINES':
+      return { ...state, machines: [...state.machines, ...action.machines] }
 
     case 'UPDATE_MACHINE':
       return {
@@ -246,6 +249,27 @@ export function StoreProvider({ children }) {
 
       setBodyweight(value) {
         dispatch({ type: 'SET_SETTING', key: 'bodyweight', value: Number(value) || 0 })
+      },
+
+      /** Add the common free-weight/bodyweight exercises not already present. */
+      addCommonExercises() {
+        const existing = new Set(state.machines.map((m) => m.name.trim().toLowerCase()))
+        const now = Date.now()
+        const toAdd = COMMON_EXERCISES.filter(
+          (e) => !existing.has(e.name.toLowerCase()),
+        ).map((e, i) => ({
+          id: uid('m'),
+          name: e.name,
+          model: '',
+          muscleGroup: e.muscleGroup,
+          type: e.type,
+          notes: '',
+          hasPhoto: false,
+          archived: false,
+          createdAt: now + i,
+        }))
+        if (toAdd.length) dispatch({ type: 'ADD_MACHINES', machines: toAdd })
+        return toAdd.length
       },
 
       /**

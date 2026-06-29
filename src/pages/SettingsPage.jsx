@@ -6,8 +6,17 @@ import PageHeader from '../components/PageHeader.jsx'
 import { IconImage, IconTrash, IconDownload } from '../components/Icons.jsx'
 
 export default function SettingsPage() {
-  const { state, setUnit, setBodyweight, exportData, importData, importWorkout, resetAll, loadSampleHistory } =
-    useStore()
+  const {
+    state,
+    setUnit,
+    setBodyweight,
+    exportData,
+    importData,
+    importWorkout,
+    resetAll,
+    loadSampleHistory,
+    addCommonExercises,
+  } = useStore()
   const fileRef = useRef(null)
   const dayFileRef = useRef(null)
   const [status, setStatus] = useState(null)
@@ -96,6 +105,16 @@ export default function SettingsPage() {
       loadSampleHistory()
       setStatus({ ok: true, msg: 'Sample history added.' })
     }
+  }
+
+  function handleAddCommon() {
+    const n = addCommonExercises()
+    setStatus({
+      ok: true,
+      msg: n
+        ? `Added ${n} common exercise${n > 1 ? 's' : ''}.`
+        : 'All common exercises are already in your library.',
+    })
   }
 
   return (
@@ -188,6 +207,16 @@ export default function SettingsPage() {
               <div className="text-sm text-slate-400">
                 Adds a single “Export this day” file into your log without replacing anything.
               </div>
+            </div>
+          </button>
+          <button
+            className="w-full p-4 text-left hover:bg-ink-700/50 transition"
+            onClick={handleAddCommon}
+          >
+            <div className="font-semibold">Add common exercises</div>
+            <div className="text-sm text-slate-400">
+              Free-weight & bodyweight staples (bench, squat, deadlift, pull-up…). Skips any you
+              already have.
             </div>
           </button>
           <button
