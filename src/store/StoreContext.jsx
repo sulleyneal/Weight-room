@@ -74,6 +74,18 @@ function reducer(state, action) {
       return { ...state, sets, workouts }
     }
 
+    case 'ADD_ROUTINE':
+      return { ...state, routines: [...state.routines, action.routine] }
+
+    case 'UPDATE_ROUTINE':
+      return {
+        ...state,
+        routines: state.routines.map((r) => (r.id === action.id ? { ...r, ...action.patch } : r)),
+      }
+
+    case 'DELETE_ROUTINE':
+      return { ...state, routines: state.routines.filter((r) => r.id !== action.id) }
+
     case 'SET_UNIT':
       return { ...state, settings: { ...state.settings, unit: action.unit } }
 
@@ -249,6 +261,26 @@ export function StoreProvider({ children }) {
 
       setBodyweight(value) {
         dispatch({ type: 'SET_SETTING', key: 'bodyweight', value: Number(value) || 0 })
+      },
+
+      // Routines (saved exercise templates)
+      addRoutine({ name, exerciseIds }) {
+        const routine = {
+          id: uid('r'),
+          name: name?.trim() || 'Routine',
+          exerciseIds: [...new Set(exerciseIds || [])],
+          createdAt: Date.now(),
+        }
+        dispatch({ type: 'ADD_ROUTINE', routine })
+        return routine.id
+      },
+
+      updateRoutine(id, patch) {
+        dispatch({ type: 'UPDATE_ROUTINE', id, patch })
+      },
+
+      deleteRoutine(id) {
+        dispatch({ type: 'DELETE_ROUTINE', id })
       },
 
       /** Add the common free-weight/bodyweight exercises not already present. */

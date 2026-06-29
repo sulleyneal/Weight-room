@@ -159,6 +159,14 @@ export function IconImage({ size = 24, ...p }) {
   )
 }
 
+export function IconList({ size = 24, ...p }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base} {...p}>
+      <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+    </svg>
+  )
+}
+
 export function IconDownload({ size = 24, ...p }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...base} {...p}>

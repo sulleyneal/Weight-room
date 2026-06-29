@@ -19,6 +19,17 @@ import MachinePhoto from '../components/MachinePhoto.jsx'
 import MuscleChip from '../components/MuscleChip.jsx'
 import { IconChevronRight } from '../components/Icons.jsx'
 
+// Render a dot only on days a workout actually happened.
+function renderTrainedDot(props) {
+  const { cx, cy, payload, index } = props
+  if (cx == null || cy == null || !payload?.trained) {
+    return <circle key={index} cx={cx || 0} cy={cy || 0} r={0} fill="none" />
+  }
+  return (
+    <circle key={index} cx={cx} cy={cy} r={3.2} fill="#e2e8f0" stroke="#0d1320" strokeWidth={1.5} />
+  )
+}
+
 const STATUS = {
   low: {
     label: 'Backing off',
@@ -141,7 +152,7 @@ export default function ProgressPage() {
                   name="Load"
                   stroke="#e2e8f0"
                   strokeWidth={2.5}
-                  dot={false}
+                  dot={renderTrainedDot}
                   isAnimationActive={false}
                 />
               </ComposedChart>

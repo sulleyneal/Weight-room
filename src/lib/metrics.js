@@ -210,6 +210,7 @@ export function trainingLoadSeries(machines, workouts, sets, group = 'All') {
       low: Math.round(low),
       high: Math.round(high),
       span: Math.max(0, Math.round(high - low)),
+      trained: v > 0, // a workout happened this day → show a dot
     }
   })
 

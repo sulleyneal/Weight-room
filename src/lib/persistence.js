@@ -17,6 +17,7 @@ export function emptyState() {
     machines: [], // { id, name, model, muscleGroup, type, notes, hasPhoto, archived, createdAt }
     workouts: [], // { id, date }  (date = 'YYYY-MM-DD')
     sets: [], // { id, workoutId, machineId, weight, reps, order }
+    routines: [], // { id, name, exerciseIds: [machineId], createdAt }
     settings: { unit: 'lbs', bodyweight: 0 },
   }
 }
@@ -41,6 +42,7 @@ export function saveState(state) {
       machines: state.machines,
       workouts: state.workouts,
       sets: state.sets,
+      routines: state.routines,
       settings: state.settings,
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
@@ -62,6 +64,7 @@ function migrate(state) {
     machines: (state.machines || []).map((m) => ({ type: 'Machine', ...m })),
     workouts: state.workouts || [],
     sets: state.sets || [],
+    routines: state.routines || [],
   }
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store/StoreContext.jsx'
 import { todayISO, fmtDate, fmtDateShort, epley1RM, sessionsForMachine } from '../lib/metrics.js'
 import { weightStep, unitLabel, fmtWeight } from '../lib/units.js'
@@ -21,7 +21,9 @@ import {
   IconChevronRight,
   IconDownload,
   IconChart,
+  IconList,
 } from '../components/Icons.jsx'
+import RoutinesModal from '../components/RoutinesModal.jsx'
 
 export default function LogWorkout({ date: routeDate }) {
   const store = useStore()
@@ -31,16 +33,20 @@ export default function LogWorkout({ date: routeDate }) {
   const [date, setDate] = useState(routeDate || todayISO())
   const [pickerOpen, setPickerOpen] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [routinesOpen, setRoutinesOpen] = useState(false)
   // Machines explicitly added to this session that don't yet have sets.
   const [addedMachineIds, setAddedMachineIds] = useState([])
+  // Exercises to preload when the date next settles (e.g. starting a routine).
+  const pendingPreloadRef = useRef(null)
 
   useEffect(() => {
     if (routeDate) setDate(routeDate)
   }, [routeDate])
 
-  // Reset the "added" list when the date changes.
+  // Reset the "added" list when the date changes — unless a preload is pending.
   useEffect(() => {
-    setAddedMachineIds([])
+    setAddedMachineIds(pendingPreloadRef.current || [])
+    pendingPreloadRef.current = null
   }, [date])
 
   const workout = state.workouts.find((w) => w.date === date)
@@ -80,6 +86,20 @@ export default function LogWorkout({ date: routeDate }) {
     const payload = store.exportWorkout(date)
     if (!payload) return
     downloadJSON(`weight-room-${date}.json`, payload)
+  }
+
+  // Preload a routine's exercises into today's session.
+  function startRoutine(exerciseIds) {
+    const valid = exerciseIds.filter((id) =>
+      state.machines.some((m) => m.id === id && !m.archived),
+    )
+    const today = todayISO()
+    if (date === today) {
+      setAddedMachineIds((prev) => [...new Set([...prev, ...valid])])
+    } else {
+      pendingPreloadRef.current = valid
+      setDate(today)
+    }
   }
 
   const daySummary = useMemo(
@@ -148,9 +168,14 @@ export default function LogWorkout({ date: routeDate }) {
         })}
       </div>
 
-      <button className="btn-primary w-full mt-4" onClick={() => setPickerOpen(true)}>
-        <IconPlus size={20} /> Add exercise
-      </button>
+      <div className="grid grid-cols-2 gap-2 mt-4">
+        <button className="btn-primary" onClick={() => setPickerOpen(true)}>
+          <IconPlus size={20} /> Add exercise
+        </button>
+        <button className="btn-ghost" onClick={() => setRoutinesOpen(true)}>
+          <IconList size={20} /> Routines
+        </button>
+      </div>
 
       {todaysSets.length > 0 && (
         <div className="grid grid-cols-2 gap-2 mt-2">
@@ -164,6 +189,12 @@ export default function LogWorkout({ date: routeDate }) {
       )}
 
       <SummaryModal open={summaryOpen} onClose={() => setSummaryOpen(false)} summary={daySummary} />
+
+      <RoutinesModal
+        open={routinesOpen}
+        onClose={() => setRoutinesOpen(false)}
+        onStart={startRoutine}
+      />
 
       <MachinePicker
         open={pickerOpen}
