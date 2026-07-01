@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
-import { emptyState, loadState, saveState, SCHEMA_VERSION } from '../lib/persistence.js'
+import {
+  emptyState,
+  loadState,
+  saveState,
+  buildBackupPayload,
+  SCHEMA_VERSION,
+} from '../lib/persistence.js'
+import { isSyncEnabled, pushBackup } from '../lib/gistSync.js'
 import { seedMachines, COMMON_EXERCISES } from '../data/seed.js'
 import { uid } from '../lib/id.js'
 import { todayISO, epley1RM, setVolume, prSessionsForMachine } from '../lib/metrics.js'
@@ -129,7 +136,21 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     if (!state.loaded) return
     saveState(state)
-  }, [state.machines, state.workouts, state.sets, state.settings, state.loaded])
+  }, [state.machines, state.workouts, state.sets, state.routines, state.settings, state.loaded])
+
+  // Cloud sync (opt-in): quietly push a full backup a few seconds after the
+  // data settles. No-op unless the user connected a gist token in Settings.
+  const syncTimer = useRef(null)
+  useEffect(() => {
+    if (!state.loaded || !isSyncEnabled()) return
+    clearTimeout(syncTimer.current)
+    syncTimer.current = setTimeout(() => {
+      buildBackupPayload(state)
+        .then(pushBackup)
+        .catch(() => {}) // status surfaces in Settings; never interrupt logging
+    }, 8000)
+    return () => clearTimeout(syncTimer.current)
+  }, [state.machines, state.workouts, state.sets, state.routines, state.settings, state.loaded])
 
   // ---- Actions (memoized) ----
   const actions = useMemo(() => {
@@ -448,20 +469,8 @@ export function StoreProvider({ children }) {
       },
 
       // Data management
-      async exportData() {
-        const photos = await idb.getAllPhotos()
-        return {
-          app: 'weight-room',
-          schemaVersion: SCHEMA_VERSION,
-          exportedAt: new Date().toISOString(),
-          data: {
-            machines: state.machines,
-            workouts: state.workouts,
-            sets: state.sets,
-            settings: state.settings,
-          },
-          photos, // { [machineId]: dataUrl }
-        }
+      exportData() {
+        return buildBackupPayload(state)
       },
 
       async importData(payload) {
@@ -477,6 +486,7 @@ export function StoreProvider({ children }) {
           machines: data.machines,
           workouts: data.workouts || [],
           sets: data.sets || [],
+          routines: data.routines || [],
           settings: { ...emptyState().settings, ...(data.settings || {}) },
         }
         await idb.replaceAllPhotos(payload?.photos || {})

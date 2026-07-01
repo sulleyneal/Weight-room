@@ -53,6 +53,30 @@ export function saveState(state) {
   }
 }
 
+/**
+ * Build the full backup payload (Settings export and cloud sync both use this,
+ * so they always stay in the same shape). Includes photos as base64 data-URLs.
+ * NOTE: sync credentials live in their own storage keys and are intentionally
+ * never part of this payload.
+ */
+export async function buildBackupPayload(state) {
+  const { getAllPhotos } = await import('./idb.js')
+  const photos = await getAllPhotos()
+  return {
+    app: 'weight-room',
+    schemaVersion: SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: {
+      machines: state.machines,
+      workouts: state.workouts,
+      sets: state.sets,
+      routines: state.routines,
+      settings: state.settings,
+    },
+    photos, // { [machineId]: dataUrl }
+  }
+}
+
 // Forward-compatible migration hook. Currently a no-op beyond shape-filling.
 function migrate(state) {
   const base = emptyState()

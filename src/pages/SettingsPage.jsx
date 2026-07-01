@@ -3,6 +3,7 @@ import { useStore } from '../store/StoreContext.jsx'
 import { unitLabel } from '../lib/units.js'
 import { downloadJSON } from '../lib/download.js'
 import PageHeader from '../components/PageHeader.jsx'
+import CloudSyncCard from '../components/CloudSyncCard.jsx'
 import { IconImage, IconTrash, IconDownload } from '../components/Icons.jsx'
 
 export default function SettingsPage() {
@@ -241,6 +242,12 @@ export default function SettingsPage() {
           className="hidden"
           onChange={handleImportDayFile}
         />
+      </section>
+
+      {/* Cloud sync */}
+      <section className="mb-6">
+        <h2 className="font-bold mb-2 px-1">Cloud sync</h2>
+        <CloudSyncCard onStatus={setStatus} />
       </section>
 
       {/* Danger zone */}
