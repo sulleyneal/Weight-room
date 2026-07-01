@@ -145,6 +145,15 @@ export default function LogWorkout({ date: routeDate }) {
         </button>
       </div>
 
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button className="btn-primary" onClick={() => setPickerOpen(true)}>
+          <IconPlus size={20} /> Add exercise
+        </button>
+        <button className="btn-ghost" onClick={() => setRoutinesOpen(true)}>
+          <IconList size={20} /> Routines
+        </button>
+      </div>
+
       {sessionMachineIds.length === 0 && (
         <div className="card p-8 text-center mb-4">
           <p className="text-slate-400 mb-1">No exercises yet for this day.</p>
@@ -152,8 +161,9 @@ export default function LogWorkout({ date: routeDate }) {
         </div>
       )}
 
+      {/* Newest exercise first, so the one you're working on stays at the top. */}
       <div className="space-y-4">
-        {sessionMachineIds.map((machineId) => {
+        {[...sessionMachineIds].reverse().map((machineId) => {
           const machine = machineById.get(machineId)
           if (!machine) return null
           return (
@@ -168,17 +178,8 @@ export default function LogWorkout({ date: routeDate }) {
         })}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mt-4">
-        <button className="btn-primary" onClick={() => setPickerOpen(true)}>
-          <IconPlus size={20} /> Add exercise
-        </button>
-        <button className="btn-ghost" onClick={() => setRoutinesOpen(true)}>
-          <IconList size={20} /> Routines
-        </button>
-      </div>
-
       {todaysSets.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 mt-2">
+        <div className="grid grid-cols-2 gap-2 mt-4">
           <button className="btn-ghost" onClick={() => setSummaryOpen(true)}>
             <IconChart size={20} /> Summary
           </button>
