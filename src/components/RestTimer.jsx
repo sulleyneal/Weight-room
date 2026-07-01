@@ -42,10 +42,27 @@ function fmt(s) {
  * that buzzes/vibrates at zero. Works off a target timestamp so it stays
  * accurate even if the tab is backgrounded.
  */
-export default function RestTimer() {
+const PREF_KEY = 'weight-room:rest-secs'
+
+function preferredSecs() {
+  const v = Number(localStorage.getItem(PREF_KEY))
+  return v >= 15 && v <= 600 ? v : 90
+}
+
+export default function RestTimer({ autoStartToken = 0 }) {
   const [target, setTarget] = useState(null) // epoch ms when rest ends
   const [remaining, setRemaining] = useState(0)
   const firedRef = useRef(false)
+
+  // Auto-start with the last-used duration whenever a set is logged.
+  const tokenRef = useRef(autoStartToken)
+  useEffect(() => {
+    if (autoStartToken !== tokenRef.current) {
+      tokenRef.current = autoStartToken
+      start(preferredSecs())
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStartToken])
 
   useEffect(() => {
     if (!target) return
@@ -101,7 +118,10 @@ export default function RestTimer() {
         <button
           key={p.s}
           className="btn-ghost flex-1 py-2 text-sm tabular-nums"
-          onClick={() => start(p.s)}
+          onClick={() => {
+            localStorage.setItem(PREF_KEY, String(p.s)) // becomes the auto-start duration
+            start(p.s)
+          }}
         >
           {p.label}
         </button>

@@ -31,6 +31,7 @@ import {
   IconList,
 } from '../components/Icons.jsx'
 import RoutinesModal from '../components/RoutinesModal.jsx'
+import { useWakeLock } from '../hooks/useWakeLock.js'
 
 export default function LogWorkout({ date: routeDate }) {
   const store = useStore()
@@ -56,11 +57,28 @@ export default function LogWorkout({ date: routeDate }) {
     pendingPreloadRef.current = null
   }, [date])
 
+  // Keep the screen awake while logging — no unlocking between sets.
+  useWakeLock(true)
+
   const workout = state.workouts.find((w) => w.date === date)
   const todaysSets = useMemo(
     () => (workout ? state.sets.filter((s) => s.workoutId === workout.id) : []),
     [workout, state.sets],
   )
+
+  // Elapsed session time (today only): from the first set logged this session.
+  const sessionStart = useMemo(() => {
+    if (date !== todayISO()) return null
+    const ts = todaysSets.map((s) => s.t).filter(Boolean)
+    return ts.length ? Math.min(...ts) : null
+  }, [date, todaysSets])
+  const [nowTick, setNowTick] = useState(Date.now())
+  useEffect(() => {
+    if (!sessionStart) return
+    const id = setInterval(() => setNowTick(Date.now()), 30000)
+    return () => clearInterval(id)
+  }, [sessionStart])
+  const elapsedMin = sessionStart ? Math.max(0, Math.round((nowTick - sessionStart) / 60000)) : null
 
   // Machine ids in display order: those with sets today (by first appearance)
   // followed by explicitly-added ones.
@@ -121,7 +139,10 @@ export default function LogWorkout({ date: routeDate }) {
 
   return (
     <div>
-      <PageHeader title="Log workout" subtitle={fmtDate(date)} />
+      <PageHeader
+        title="Log workout"
+        subtitle={elapsedMin != null ? `${fmtDate(date)} · ${elapsedMin} min` : fmtDate(date)}
+      />
 
       {/* Date control */}
       <div className="card p-3 mb-4 flex items-center gap-2">
@@ -259,10 +280,18 @@ function MachineBlock({ machine, date, unit, store }) {
 
   const [weight, setWeight] = useState(defaultWeight)
   const [reps, setReps] = useState(seedSet?.reps ?? 10)
+  // Bumped after each logged set; RestTimer auto-starts on the change.
+  const [restToken, setRestToken] = useState(0)
+
+  function afterSetLogged() {
+    if (navigator.vibrate) navigator.vibrate(15)
+    setRestToken((t) => t + 1)
+  }
 
   function addSet() {
     const workoutId = store.ensureWorkout(date)
     store.addSet({ workoutId, machineId: machine.id, weight, reps })
+    afterSetLogged()
   }
 
   function repeatLastSet() {
@@ -272,6 +301,7 @@ function MachineBlock({ machine, date, unit, store }) {
     store.addSet({ workoutId, machineId: machine.id, weight: ref.weight, reps: ref.reps })
     setWeight(ref.weight)
     setReps(ref.reps)
+    afterSetLogged()
   }
 
   function copyLastWorkout() {
@@ -372,7 +402,7 @@ function MachineBlock({ machine, date, unit, store }) {
         </div>
 
         <div className="pt-1">
-          <RestTimer />
+          <RestTimer autoStartToken={restToken} />
         </div>
 
         {sets.length > 0 && (

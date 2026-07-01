@@ -223,6 +223,7 @@ export function StoreProvider({ children }) {
           weight: Number(weight) || 0,
           reps: Number(reps) || 0,
           order,
+          t: Date.now(), // wall-clock time logged, for session elapsed display
         }
         dispatch({ type: 'ADD_SET', set })
         return set
