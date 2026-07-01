@@ -126,6 +126,17 @@ export default function Dashboard() {
 
       {!hasData && <FirstRun />}
 
+      {hasData && (
+        <button
+          className="card w-full flex items-center gap-3 p-3 mb-5 text-left hover:bg-ink-700/60 transition"
+          onClick={() => navigate('/records')}
+        >
+          <IconTrophy size={20} className="text-yellow-400 shrink-0" />
+          <span className="flex-1 font-semibold">Records, streaks & calendar</span>
+          <IconChevronRight size={18} className="text-slate-500" />
+        </button>
+      )}
+
       {/* Body-part split */}
       {split.rows.length > 0 && (
         <section className="mb-6">

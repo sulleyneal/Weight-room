@@ -7,6 +7,7 @@ import MachineDetail from './pages/MachineDetail.jsx'
 import ProgressPage from './pages/ProgressPage.jsx'
 import LogWorkout from './pages/LogWorkout.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
+import RecordsPage from './pages/RecordsPage.jsx'
 
 export default function App() {
   const path = useHashRoute()
@@ -46,6 +47,8 @@ function renderRoute(path) {
       return <LogWorkout />
     case '/settings':
       return <SettingsPage />
+    case '/records':
+      return <RecordsPage />
     default:
       return <Dashboard />
   }
