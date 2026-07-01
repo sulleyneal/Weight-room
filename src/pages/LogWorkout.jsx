@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store/StoreContext.jsx'
-import { todayISO, fmtDate, fmtDateShort, epley1RM, sessionsForMachine } from '../lib/metrics.js'
+import {
+  todayISO,
+  fmtDate,
+  fmtDateShort,
+  epley1RM,
+  sessionsForMachine,
+  suggestProgression,
+} from '../lib/metrics.js'
 import { weightStep, unitLabel, fmtWeight } from '../lib/units.js'
 import { downloadJSON } from '../lib/download.js'
 import { navigate } from '../router.jsx'
@@ -231,20 +238,16 @@ function MachineBlock({ machine, date, unit, store }) {
     return last.sets[last.sets.length - 1] || null
   }, [machine.id, state.workouts, state.sets, date])
 
-  // Most recent session strictly before this date, for the "last time" hint.
-  const prevSession = useMemo(() => {
-    const prior = sessionsForMachine(machine.id, state.workouts, state.sets).filter(
-      (s) => s.date < date,
-    )
-    return prior.length ? prior[prior.length - 1] : null
-  }, [machine.id, state.workouts, state.sets, date])
-
-  // Heaviest set last time + a small progressive-overload bump.
-  const prevTopSet = useMemo(() => {
-    if (!prevSession) return null
-    return prevSession.sets.reduce((m, s) => (s.weight > (m?.weight ?? -1) ? s : m), null)
-  }, [prevSession])
-  const suggestWeight = prevTopSet ? prevTopSet.weight + weightStep(unit) : null
+  // Sessions strictly before this date: "last time" hint + coaching suggestion.
+  const priorSessions = useMemo(
+    () => sessionsForMachine(machine.id, state.workouts, state.sets).filter((s) => s.date < date),
+    [machine.id, state.workouts, state.sets, date],
+  )
+  const prevSession = priorSessions.length ? priorSessions[priorSessions.length - 1] : null
+  const suggestion = useMemo(
+    () => suggestProgression(priorSessions, weightStep(unit)),
+    [priorSessions, unit],
+  )
 
   const lastTodaySet = sets[sets.length - 1] || null
   const seedSet = lastTodaySet || lastEverSet
@@ -318,15 +321,22 @@ function MachineBlock({ machine, date, unit, store }) {
           <div className="rounded-xl bg-ink-700/50 border border-ink-600 p-2.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-slate-400">Last · {fmtDateShort(prevSession.date)}</span>
-              {suggestWeight != null && (
+              {suggestion && (
                 <button
-                  className="text-xs font-bold text-brand-400"
+                  className={`text-xs font-bold ${
+                    suggestion.mode === 'increase'
+                      ? 'text-green-400'
+                      : suggestion.mode === 'deload'
+                        ? 'text-orange-400'
+                        : 'text-brand-400'
+                  }`}
                   onClick={() => {
-                    setWeight(suggestWeight)
-                    setReps(prevTopSet.reps)
+                    setWeight(suggestion.weight)
+                    setReps(suggestion.reps)
                   }}
                 >
-                  Try {fmtWeight(suggestWeight, unit)} →
+                  {suggestion.mode === 'increase' ? '▲' : suggestion.mode === 'deload' ? '▼' : '＋'}{' '}
+                  {suggestion.label}: {fmtWeight(suggestion.weight, unit)} × {suggestion.reps} →
                 </button>
               )}
             </div>

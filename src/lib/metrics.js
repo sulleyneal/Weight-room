@@ -145,6 +145,59 @@ export function weekStartISO(iso) {
   return new Date(ws.getTime() - tz * 60000).toISOString().slice(0, 10)
 }
 
+/**
+ * Double-progression coaching suggestion from an exercise's prior sessions
+ * (chronological, most recent last). Returns null with no history, else
+ * { mode: 'increase' | 'reps' | 'deload', weight, reps, label }.
+ *
+ * Heuristic:
+ *  - Every top-weight set hit 10+ reps → earned a weight increase (back to 8s).
+ *  - Best e1RM fell two sessions running → deload ~10% and rebuild.
+ *  - Otherwise → same weight, one more rep than the worst top-weight set.
+ */
+export function suggestProgression(prevSessions, step) {
+  const n = prevSessions.length
+  if (!n) return null
+  const last = prevSessions[n - 1]
+  if (!last.sets.length || last.topSetWeight <= 0) return null
+
+  const snap = (w) => Math.max(step, Math.round(w / step) * step)
+  const topSets = last.sets.filter((s) => (Number(s.weight) || 0) >= last.topSetWeight - 1e-9)
+  const worstReps = Math.min(...topSets.map((s) => Number(s.reps) || 0))
+
+  if (worstReps >= 10) {
+    return {
+      mode: 'increase',
+      weight: snap(last.topSetWeight + step),
+      reps: 8,
+      label: 'Add weight',
+    }
+  }
+
+  const prev = prevSessions[n - 2]
+  const prev2 = prevSessions[n - 3]
+  if (
+    prev &&
+    prev2 &&
+    last.best1RM < prev.best1RM - 1e-9 &&
+    prev.best1RM < prev2.best1RM - 1e-9
+  ) {
+    return {
+      mode: 'deload',
+      weight: snap(last.topSetWeight * 0.9),
+      reps: 10,
+      label: 'Deload & rebuild',
+    }
+  }
+
+  return {
+    mode: 'reps',
+    weight: last.topSetWeight,
+    reps: Math.min(Math.max(worstReps + 1, 6), 12),
+    label: 'Add a rep',
+  }
+}
+
 /** ISO date `n` days after `iso` (local). */
 export function addDaysISO(iso, n) {
   const [y, m, d] = iso.split('-').map(Number)
