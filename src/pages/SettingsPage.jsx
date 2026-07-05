@@ -17,6 +17,7 @@ export default function SettingsPage() {
     resetAll,
     loadSampleHistory,
     addCommonExercises,
+    installStarterPrograms,
   } = useStore()
   const fileRef = useRef(null)
   const dayFileRef = useRef(null)
@@ -218,6 +219,25 @@ export default function SettingsPage() {
             <div className="text-sm text-slate-400">
               Free-weight & bodyweight staples (bench, squat, deadlift, pull-up…). Skips any you
               already have.
+            </div>
+          </button>
+          <button
+            className="w-full p-4 text-left hover:bg-ink-700/50 transition"
+            onClick={() => {
+              const r = installStarterPrograms()
+              setStatus({
+                ok: true,
+                msg: r.added
+                  ? `Installed ${r.added} program${r.added > 1 ? 's' : ''}${
+                      r.machinesCreated ? ` and added ${r.machinesCreated} machine` : ''
+                    }.`
+                  : 'The Lower/Upper Day programs already exist.',
+              })
+            }}
+          >
+            <div className="font-semibold">Install Lower/Upper split</div>
+            <div className="text-sm text-slate-400">
+              Two alternating day programs with set × rep-range targets. Skips ones you have.
             </div>
           </button>
           <button

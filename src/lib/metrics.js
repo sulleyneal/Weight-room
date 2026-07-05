@@ -150,26 +150,32 @@ export function weekStartISO(iso) {
  * (chronological, most recent last). Returns null with no history, else
  * { mode: 'increase' | 'reps' | 'deload', weight, reps, label }.
  *
+ * `repRange` ({ low, high }, optional) comes from a program/routine target for
+ * the movement; without one, a generic 8–10-ish range applies.
+ *
  * Heuristic:
- *  - Every top-weight set hit 10+ reps → earned a weight increase (back to 8s).
+ *  - Every top-weight set hit the top of the rep range → earned a weight
+ *    increase (drop back to the bottom of the range).
  *  - Best e1RM fell two sessions running → deload ~10% and rebuild.
  *  - Otherwise → same weight, one more rep than the worst top-weight set.
  */
-export function suggestProgression(prevSessions, step) {
+export function suggestProgression(prevSessions, step, repRange) {
   const n = prevSessions.length
   if (!n) return null
   const last = prevSessions[n - 1]
   if (!last.sets.length || last.topSetWeight <= 0) return null
 
+  const high = repRange?.high ?? 10
+  const low = repRange?.low ?? 8
   const snap = (w) => Math.max(step, Math.round(w / step) * step)
   const topSets = last.sets.filter((s) => (Number(s.weight) || 0) >= last.topSetWeight - 1e-9)
   const worstReps = Math.min(...topSets.map((s) => Number(s.reps) || 0))
 
-  if (worstReps >= 10) {
+  if (worstReps >= high) {
     return {
       mode: 'increase',
       weight: snap(last.topSetWeight + step),
-      reps: 8,
+      reps: low,
       label: 'Add weight',
     }
   }
@@ -185,7 +191,7 @@ export function suggestProgression(prevSessions, step) {
     return {
       mode: 'deload',
       weight: snap(last.topSetWeight * 0.9),
-      reps: 10,
+      reps: high,
       label: 'Deload & rebuild',
     }
   }
@@ -193,7 +199,7 @@ export function suggestProgression(prevSessions, step) {
   return {
     mode: 'reps',
     weight: last.topSetWeight,
-    reps: Math.min(Math.max(worstReps + 1, 6), 12),
+    reps: Math.min(Math.max(worstReps + 1, Math.min(low, 6)), high),
     label: 'Add a rep',
   }
 }

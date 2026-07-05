@@ -17,7 +17,9 @@ export function emptyState() {
     machines: [], // { id, name, model, muscleGroup, type, notes, hasPhoto, archived, createdAt }
     workouts: [], // { id, date }  (date = 'YYYY-MM-DD')
     sets: [], // { id, workoutId, machineId, weight, reps, order }
-    routines: [], // { id, name, exerciseIds: [machineId], createdAt }
+    // Routines are ordered programs. Each item: { machineId, sets, repLow, repHigh }
+    // (targets are advisory — actual weight/reps are whatever gets logged).
+    routines: [], // { id, name, items: [item], createdAt }
     settings: { unit: 'lbs', bodyweight: 0 },
   }
 }
@@ -77,6 +79,41 @@ export async function buildBackupPayload(state) {
   }
 }
 
+/**
+ * Bring a routine (from storage or an old backup) to the current items shape.
+ * Early routines stored a bare `exerciseIds` list — those become items with
+ * default targets. Items with missing/invalid targets get nulls (no target).
+ */
+export function normalizeRoutine(r) {
+  const clampInt = (v, lo, hi) => {
+    const n = Math.round(Number(v))
+    return Number.isFinite(n) && n >= lo && n <= hi ? n : null
+  }
+  let items = []
+  if (Array.isArray(r.items)) {
+    items = r.items
+      .filter((it) => it && it.machineId)
+      .map((it) => ({
+        machineId: it.machineId,
+        sets: clampInt(it.sets, 1, 10) ?? 3,
+        repLow: clampInt(it.repLow, 1, 100),
+        repHigh: clampInt(it.repHigh, 1, 100),
+      }))
+  } else if (Array.isArray(r.exerciseIds)) {
+    items = r.exerciseIds.map((machineId) => ({
+      machineId,
+      sets: 3,
+      repLow: null,
+      repHigh: null,
+    }))
+  }
+  return { id: r.id, name: r.name || 'Routine', items, createdAt: r.createdAt || 0 }
+}
+
+export function normalizeRoutines(routines) {
+  return (routines || []).filter(Boolean).map(normalizeRoutine)
+}
+
 // Forward-compatible migration hook. Currently a no-op beyond shape-filling.
 function migrate(state) {
   const base = emptyState()
@@ -88,7 +125,7 @@ function migrate(state) {
     machines: (state.machines || []).map((m) => ({ type: 'Machine', ...m })),
     workouts: state.workouts || [],
     sets: state.sets || [],
-    routines: state.routines || [],
+    routines: normalizeRoutines(state.routines),
   }
 }
 

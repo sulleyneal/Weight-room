@@ -4,10 +4,12 @@ import {
   loadState,
   saveState,
   buildBackupPayload,
+  normalizeRoutine,
+  normalizeRoutines,
   SCHEMA_VERSION,
 } from '../lib/persistence.js'
 import { isSyncEnabled, pushBackup } from '../lib/gistSync.js'
-import { seedMachines, COMMON_EXERCISES } from '../data/seed.js'
+import { seedMachines, COMMON_EXERCISES, STARTER_PROGRAMS, PROGRAM_MACHINES } from '../data/seed.js'
 import { uid } from '../lib/id.js'
 import { todayISO, epley1RM, setVolume, prSessionsForMachine } from '../lib/metrics.js'
 import { computeIntensities } from '../lib/bodyMap.js'
@@ -285,24 +287,92 @@ export function StoreProvider({ children }) {
         dispatch({ type: 'SET_SETTING', key: 'bodyweight', value: Number(value) || 0 })
       },
 
-      // Routines (saved exercise templates)
-      addRoutine({ name, exerciseIds }) {
-        const routine = {
+      // Routines: ordered programs of { machineId, sets, repLow, repHigh }.
+      addRoutine({ name, items }) {
+        const routine = normalizeRoutine({
           id: uid('r'),
-          name: name?.trim() || 'Routine',
-          exerciseIds: [...new Set(exerciseIds || [])],
+          name,
+          items,
           createdAt: Date.now(),
-        }
+        })
         dispatch({ type: 'ADD_ROUTINE', routine })
         return routine.id
       },
 
       updateRoutine(id, patch) {
-        dispatch({ type: 'UPDATE_ROUTINE', id, patch })
+        const clean = { ...patch }
+        if (patch.items) {
+          clean.items = normalizeRoutine({ id, name: 'x', items: patch.items }).items
+        }
+        dispatch({ type: 'UPDATE_ROUTINE', id, patch: clean })
       },
 
       deleteRoutine(id) {
         dispatch({ type: 'DELETE_ROUTINE', id })
+      },
+
+      /**
+       * Install the starter Lower/Upper day programs. Items are declared by
+       * machine NAME: they resolve to existing machines case-insensitively,
+       * and machines listed in PROGRAM_MACHINES are created when missing
+       * (e.g. Seated Rotary Calf). Routines whose name already exists are
+       * left untouched. Returns a summary for user feedback.
+       */
+      installStarterPrograms() {
+        const norm = (s) => (s || '').trim().toLowerCase()
+        const byName = new Map(state.machines.filter((m) => !m.archived).map((m) => [norm(m.name), m]))
+        const specByName = new Map(PROGRAM_MACHINES.map((m) => [norm(m.name), m]))
+        const existingRoutines = new Set(state.routines.map((r) => norm(r.name)))
+
+        const newMachines = []
+        const resolve = (name) => {
+          const key = norm(name)
+          let m = byName.get(key)
+          if (m) return m.id
+          const spec = specByName.get(key) || { name, muscleGroup: 'Other', type: 'Machine' }
+          m = {
+            id: uid('m'),
+            name: spec.name || name,
+            model: spec.model || '',
+            muscleGroup: spec.muscleGroup || 'Other',
+            type: spec.type || 'Machine',
+            notes: spec.notes || '',
+            hasPhoto: false,
+            archived: false,
+            createdAt: Date.now() + newMachines.length,
+          }
+          newMachines.push(m)
+          byName.set(key, m)
+          return m.id
+        }
+
+        let added = 0
+        let skipped = 0
+        const newRoutines = []
+        for (const program of STARTER_PROGRAMS) {
+          if (existingRoutines.has(norm(program.name))) {
+            skipped++
+            continue
+          }
+          newRoutines.push(
+            normalizeRoutine({
+              id: uid('r'),
+              name: program.name,
+              items: program.items.map((it) => ({
+                machineId: resolve(it.machine),
+                sets: it.sets,
+                repLow: it.repLow,
+                repHigh: it.repHigh,
+              })),
+              createdAt: Date.now() + added,
+            }),
+          )
+          added++
+        }
+
+        if (newMachines.length) dispatch({ type: 'ADD_MACHINES', machines: newMachines })
+        for (const r of newRoutines) dispatch({ type: 'ADD_ROUTINE', routine: r })
+        return { added, skipped, machinesCreated: newMachines.length }
       },
 
       /** Add the common free-weight/bodyweight exercises not already present. */
@@ -487,7 +557,7 @@ export function StoreProvider({ children }) {
           machines: data.machines,
           workouts: data.workouts || [],
           sets: data.sets || [],
-          routines: data.routines || [],
+          routines: normalizeRoutines(data.routines),
           settings: { ...emptyState().settings, ...(data.settings || {}) },
         }
         await idb.replaceAllPhotos(payload?.photos || {})

@@ -44,17 +44,23 @@ export default function LogWorkout({ date: routeDate }) {
   const [routinesOpen, setRoutinesOpen] = useState(false)
   // Machines explicitly added to this session that don't yet have sets.
   const [addedMachineIds, setAddedMachineIds] = useState([])
-  // Exercises to preload when the date next settles (e.g. starting a routine).
+  // Program state for this session: per-machine targets + the program's order.
+  const [sessionTargets, setSessionTargets] = useState({})
+  const [templateOrder, setTemplateOrder] = useState([])
+  // Session to preload when the date next settles (e.g. starting a program).
   const pendingPreloadRef = useRef(null)
 
   useEffect(() => {
     if (routeDate) setDate(routeDate)
   }, [routeDate])
 
-  // Reset the "added" list when the date changes — unless a preload is pending.
+  // Reset session-scoped state when the date changes — unless a preload is pending.
   useEffect(() => {
-    setAddedMachineIds(pendingPreloadRef.current || [])
+    const pending = pendingPreloadRef.current
     pendingPreloadRef.current = null
+    setAddedMachineIds(pending?.ids || [])
+    setSessionTargets(pending?.targets || {})
+    setTemplateOrder(pending?.order || [])
   }, [date])
 
   // Keep the screen awake while logging — no unlocking between sets.
@@ -95,6 +101,18 @@ export default function LogWorkout({ date: routeDate }) {
     return [...withSets, ...extras]
   }, [todaysSets, addedMachineIds])
 
+  // Display order: with a program active, follow its order (do-first-on-top)
+  // and append ad-hoc extras at the end; otherwise newest-added first.
+  const orderedIds = useMemo(() => {
+    if (!templateOrder.length) return [...sessionMachineIds].reverse()
+    const rank = new Map(templateOrder.map((id, i) => [id, i]))
+    const inProgram = sessionMachineIds
+      .filter((id) => rank.has(id))
+      .sort((a, b) => rank.get(a) - rank.get(b))
+    const adHoc = sessionMachineIds.filter((id) => !rank.has(id))
+    return [...inProgram, ...adHoc]
+  }, [sessionMachineIds, templateOrder])
+
   function shiftDate(days) {
     const [y, m, d] = date.split('-').map(Number)
     const dt = new Date(y, m - 1, d)
@@ -113,19 +131,38 @@ export default function LogWorkout({ date: routeDate }) {
     downloadJSON(`weight-room-${date}.json`, payload)
   }
 
-  // Preload a routine's exercises into today's session.
-  function startRoutine(exerciseIds) {
-    const valid = exerciseIds.filter((id) =>
-      state.machines.some((m) => m.id === id && !m.archived),
+  // Preload a program's exercises (in order, with targets) into today's session.
+  function startRoutine(items) {
+    const valid = items.filter((it) =>
+      state.machines.some((m) => m.id === it.machineId && !m.archived),
     )
+    const ids = valid.map((it) => it.machineId)
+    const targets = Object.fromEntries(valid.map((it) => [it.machineId, it]))
     const today = todayISO()
     if (date === today) {
-      setAddedMachineIds((prev) => [...new Set([...prev, ...valid])])
+      setAddedMachineIds((prev) => [...new Set([...prev, ...ids])])
+      setSessionTargets((prev) => ({ ...prev, ...targets }))
+      setTemplateOrder((prev) => [...new Set([...prev, ...ids])])
     } else {
-      pendingPreloadRef.current = valid
+      pendingPreloadRef.current = { ids, targets, order: ids }
       setDate(today)
     }
   }
+
+  /**
+   * Target for a machine this session: the started program's item wins; else
+   * fall back to any saved program containing the machine, so targets and the
+   * range-topped cue still apply when logging ad hoc.
+   */
+  const targetFor = useMemo(() => {
+    const fallback = new Map()
+    for (const r of state.routines) {
+      for (const it of r.items) {
+        if (!fallback.has(it.machineId)) fallback.set(it.machineId, it)
+      }
+    }
+    return (machineId) => sessionTargets[machineId] || fallback.get(machineId) || null
+  }, [state.routines, sessionTargets])
 
   const daySummary = useMemo(
     () => (summaryOpen ? store.buildDaySummary(date) : null),
@@ -185,13 +222,25 @@ export default function LogWorkout({ date: routeDate }) {
       {sessionMachineIds.length === 0 && (
         <div className="card p-8 text-center mb-4">
           <p className="text-slate-400 mb-1">No exercises yet for this day.</p>
-          <p className="text-slate-500 text-sm mb-4">Add an exercise to start logging sets.</p>
+          <p className="text-slate-500 text-sm mb-4">
+            Start a program, or add exercises one at a time.
+          </p>
+          {state.routines.length > 0 && (
+            <div className="flex flex-wrap gap-2 justify-center">
+              {state.routines.slice(0, 3).map((r) => (
+                <button key={r.id} className="btn-primary px-4" onClick={() => startRoutine(r.items)}>
+                  Start {r.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Newest exercise first, so the one you're working on stays at the top. */}
+      {/* Program sessions render in program order (first movement on top);
+          ad-hoc sessions keep newest-first so the active exercise stays up top. */}
       <div className="space-y-4">
-        {[...sessionMachineIds].reverse().map((machineId) => {
+        {orderedIds.map((machineId) => {
           const machine = machineById.get(machineId)
           if (!machine) return null
           return (
@@ -201,6 +250,7 @@ export default function LogWorkout({ date: routeDate }) {
               date={date}
               unit={unit}
               store={store}
+              target={targetFor(machineId)}
             />
           )
         })}
@@ -238,7 +288,7 @@ export default function LogWorkout({ date: routeDate }) {
 
 // ---- Per-machine set entry block ----------------------------------------
 
-function MachineBlock({ machine, date, unit, store }) {
+function MachineBlock({ machine, date, unit, store, target }) {
   const { state } = store
 
   const workout = state.workouts.find((w) => w.date === date)
@@ -265,9 +315,14 @@ function MachineBlock({ machine, date, unit, store }) {
     [machine.id, state.workouts, state.sets, date],
   )
   const prevSession = priorSessions.length ? priorSessions[priorSessions.length - 1] : null
+  const repRange =
+    target && (target.repLow != null || target.repHigh != null)
+      ? { low: target.repLow ?? target.repHigh, high: target.repHigh ?? target.repLow }
+      : null
   const suggestion = useMemo(
-    () => suggestProgression(priorSessions, weightStep(unit)),
-    [priorSessions, unit],
+    () => suggestProgression(priorSessions, weightStep(unit), repRange),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [priorSessions, unit, repRange?.low, repRange?.high],
   )
 
   const lastTodaySet = sets[sets.length - 1] || null
@@ -279,7 +334,7 @@ function MachineBlock({ machine, date, unit, store }) {
     seedSet?.weight ?? (isBodyweight && bodyweight > 0 ? bodyweight : unit === 'kg' ? 20 : 45)
 
   const [weight, setWeight] = useState(defaultWeight)
-  const [reps, setReps] = useState(seedSet?.reps ?? 10)
+  const [reps, setReps] = useState(seedSet?.reps ?? repRange?.low ?? 10)
   // Bumped after each logged set; RestTimer auto-starts on the change.
   const [restToken, setRestToken] = useState(0)
 
@@ -314,6 +369,15 @@ function MachineBlock({ machine, date, unit, store }) {
   const top = sets.reduce((max, s) => Math.max(max, s.weight), 0)
   const best1rm = sets.reduce((max, s) => Math.max(max, epley1RM(s.weight, s.reps)), 0)
 
+  // All target sets done AND every set hit the top of the rep range → the
+  // double-progression signal to add weight next session.
+  const rangeTopped = Boolean(
+    target &&
+      repRange &&
+      sets.length >= target.sets &&
+      sets.every((s) => (Number(s.reps) || 0) >= repRange.high),
+  )
+
   return (
     <div className="card overflow-hidden">
       <button
@@ -327,6 +391,25 @@ function MachineBlock({ machine, date, unit, store }) {
         </div>
         <MuscleChip group={machine.muscleGroup} />
       </button>
+
+      {/* Program target + live range-topped cue */}
+      {target && (
+        <div className="px-3 pb-2 -mt-1 flex items-center justify-between text-xs">
+          <span className="text-slate-400">
+            Target{' '}
+            <span className="font-semibold text-slate-300">
+              {target.sets} × {repRange ? (repRange.low === repRange.high ? repRange.high : `${repRange.low}–${repRange.high}`) : 'any'}
+            </span>
+          </span>
+          {rangeTopped ? (
+            <span className="font-bold text-green-400">Range topped — add weight next time ▲</span>
+          ) : (
+            <span className="text-slate-500 tabular-nums">
+              {Math.min(sets.length, target.sets)}/{target.sets} sets
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Logged sets */}
       {sets.length > 0 && (

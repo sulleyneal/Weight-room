@@ -125,6 +125,47 @@ export const COMMON_EXERCISES = [
   { name: 'Hanging Leg Raise', muscleGroup: 'Core', type: 'Bodyweight' },
 ]
 
+// Starter lower/upper split, alternated 3x/week (L-U-L, then U-L-U).
+// Items reference machines BY NAME; installStarterPrograms resolves them to ids
+// case-insensitively and creates any listed in `create` that don't exist yet.
+// Rep targets are advisory — actual weight/reps are whatever gets logged.
+export const STARTER_PROGRAMS = [
+  {
+    name: 'Lower Day',
+    items: [
+      { machine: 'Leg Press', sets: 3, repLow: 8, repHigh: 10 },
+      { machine: 'Leg Curl', sets: 3, repLow: 10, repHigh: 12 },
+      { machine: 'Leg Extension', sets: 2, repLow: 12, repHigh: 15 },
+      { machine: 'Seated Rotary Calf', sets: 2, repLow: 15, repHigh: 15 },
+      { machine: 'Lower Back', sets: 2, repLow: 12, repHigh: 15 },
+      { machine: 'Abdominal', sets: 2, repLow: 15, repHigh: 15 },
+    ],
+  },
+  {
+    name: 'Upper Day',
+    items: [
+      // Pressing first, while fresh.
+      { machine: 'Chest Press', sets: 3, repLow: 6, repHigh: 10 },
+      { machine: 'Shoulder Press', sets: 3, repLow: 6, repHigh: 10 },
+      { machine: 'Seated Row', sets: 3, repLow: 10, repHigh: 12 },
+      { machine: 'Lat Pulldown', sets: 2, repLow: 10, repHigh: 12 },
+      { machine: 'Biceps Curl', sets: 2, repLow: 10, repHigh: 12 },
+      { machine: 'Triceps Extension', sets: 2, repLow: 10, repHigh: 12 },
+    ],
+  },
+]
+
+// Machines a starter program may need that aren't in the base seed library.
+export const PROGRAM_MACHINES = [
+  {
+    name: 'Seated Rotary Calf',
+    model: 'RS-1415',
+    muscleGroup: 'Legs',
+    type: 'Machine',
+    notes: 'Full stretch at the bottom, pause at the top.',
+  },
+]
+
 export function seedMachines() {
   const now = Date.now()
   return SEED.map((m, i) => ({
