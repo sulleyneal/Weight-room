@@ -31,6 +31,7 @@ import {
   IconList,
 } from '../components/Icons.jsx'
 import RoutinesModal from '../components/RoutinesModal.jsx'
+import AskClaudeButton from '../components/AskClaudeButton.jsx'
 import { useWakeLock } from '../hooks/useWakeLock.js'
 
 export default function LogWorkout({ date: routeDate }) {
@@ -264,6 +265,7 @@ export default function LogWorkout({ date: routeDate }) {
           <button className="btn-ghost" onClick={exportThisWorkout}>
             <IconDownload size={20} /> Export JSON
           </button>
+          <AskClaudeButton className="btn-ghost col-span-2 text-brand-400 font-bold" />
         </div>
       )}
 

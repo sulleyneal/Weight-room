@@ -11,6 +11,7 @@ import { fmtNumber, unitLabel } from '../lib/units.js'
 import { MUSCLE_GROUPS, MUSCLE_COLORS } from '../data/seed.js'
 import { navigate } from '../router.jsx'
 import MuscleChip from '../components/MuscleChip.jsx'
+import AskClaudeButton from '../components/AskClaudeButton.jsx'
 import { IconPlus, IconTrophy, IconChevronRight, IconDumbbell } from '../components/Icons.jsx'
 
 export default function Dashboard() {
@@ -128,13 +129,23 @@ export default function Dashboard() {
 
       {hasData && (
         <button
-          className="card w-full flex items-center gap-3 p-3 mb-5 text-left hover:bg-ink-700/60 transition"
+          className="card w-full flex items-center gap-3 p-3 mb-2 text-left hover:bg-ink-700/60 transition"
           onClick={() => navigate('/records')}
         >
           <IconTrophy size={20} className="text-yellow-400 shrink-0" />
           <span className="flex-1 font-semibold">Records, streaks & calendar</span>
           <IconChevronRight size={18} className="text-slate-500" />
         </button>
+      )}
+
+      {/* Hand the latest workout to Claude for next-session coaching */}
+      {hasData && (
+        <div className="mb-5 space-y-1">
+          <AskClaudeButton
+            label="Ask Claude to coach my next workout"
+            className="card w-full flex items-center justify-center gap-2 p-3 font-semibold text-brand-400 hover:bg-ink-700/60 transition"
+          />
+        </div>
       )}
 
       {/* Body-part split */}
