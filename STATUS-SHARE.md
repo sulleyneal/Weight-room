@@ -33,3 +33,14 @@ previews in `docs/share-previews/`.
   PR/progress cards, gain chip colliding with the SESSIONS column, headline PR
   picker preferring first-ever sessions over real records, session table
   showing 3 of 7 exercises with dead space below.
+- iter 2 (brand checker #1: BAR NOT MET, 4 bar-failures + nits; house-rules
+  checker: 7/7 PASS). Fixed all: first-time progress lone-dot chart replaced
+  with a labeled baseline marker (PR-ring encoding consistent with the other
+  charts); story session layouts are height-aware (tall rows + centered
+  remainder — no more third-of-frame black); PR-square template geometry is
+  fixed (one hero size, one gap, sparkline slot always present with an honest
+  first-ever state); PR footer no longer contradicts the session card's
+  SESSION NNN stamp; est. 1RMs rounded everywhere; gain/change chips drop the
+  duplicated unit; PREV BEST relabelled PREV TOP SET (no cross-base misread);
+  '+N MORE' overflow is a real table row with the hidden volume aggregate;
+  chart axis/legend micro-type bumped for feed-size legibility.

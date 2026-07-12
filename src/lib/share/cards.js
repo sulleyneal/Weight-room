@@ -43,6 +43,11 @@ function fmtNum(v) {
   return Number.isInteger(r) ? String(r) : r.toFixed(1)
 }
 
+// Estimated 1RMs are estimates — decimals read as spreadsheet output.
+function fmtE1(v) {
+  return String(Math.round(v))
+}
+
 function fmtVol(v) {
   return Math.round(v).toLocaleString('en-US')
 }
@@ -151,21 +156,18 @@ export function renderPRCard(moment, formatKey = 'square') {
     nameSize: story ? 92 : 78,
   })
 
-  // Bottom-anchored zones (upward from the footer). The square format is
-  // hero-focused — the e1RM sparkline only appears on the roomier story.
-  const showSpark = story && moment.history.length >= 2
-  const sparkH = 240 // strip incl. its label (story only)
-  const sparkTop = footerTop - sparkH - 44
-  const statsY = story ? sparkTop - 132 : footerTop - 108
-  // Hero fills the space between the title block and the sub-stats.
-  const heroSpace = statsY - 64 - nameBottom
-  const heroSize = Math.min(story ? 330 : 290, Math.max(150, heroSpace - 40))
+  // Fixed template geometry — identical on every PR card of a format, so a
+  // profile grid of these reads as siblings (no data-dependent size drift).
+  const sparkH = story ? 240 : 170 // strip incl. its label
+  const sparkTop = footerTop - sparkH - (story ? 44 : 28)
+  const statsY = sparkTop - (story ? 132 : 108)
+  const heroSize = story ? 330 : 250
+  const heroBaseline = statsY - (story ? 190 : 132)
 
   const weightStr = fmtNum(moment.topWeight)
   const usedHero = fitText(ctx, weightStr, (s) => sans(s, 800), heroSize, 110, contentW - 250)
   ctx.font = sans(usedHero, 800)
   ctx.fillStyle = INK.text
-  const heroBaseline = nameBottom + heroSpace / 2 + usedHero * 0.36
   ctx.fillText(weightStr, MARGIN - 4, heroBaseline)
   const weightW = ctx.measureText(weightStr).width
   ctx.font = mono(38, 500)
@@ -175,22 +177,26 @@ export function renderPRCard(moment, formatKey = 'square') {
   ctx.fillStyle = ACCENT.brand
   trackedText(ctx, `×${moment.topReps}`, MARGIN + weightW + 28, heroBaseline - 4, 2)
 
-  // Sub-stats row.
+  // Sub-stats row. PREV TOP SET + GAIN share the top-set basis (est. 1RM is
+  // its own column) so adjacent numbers can't be misread across bases.
   hairline(ctx, MARGIN, statsY - 44, w - MARGIN, INK.hairlineFaint)
   const hasGain = moment.deltaTop != null && moment.deltaTop > 0
   const cols = [
-    { label: 'EST. 1RM', value: fmtNum(moment.e1rm) },
-    { label: 'PREV BEST', value: moment.prevBestTop != null ? fmtNum(moment.prevBestTop) : '—' },
+    { label: 'EST. 1RM', value: fmtE1(moment.e1rm) },
+    {
+      label: 'PREV TOP SET',
+      value: moment.prevBestTop != null ? fmtNum(moment.prevBestTop) : '—',
+    },
     hasGain
-      ? { label: 'GAIN', chipText: `+${fmtNum(moment.deltaTop)} ${unit}` }
-      : { label: 'SESSIONS', value: String(moment.sessionCount) },
+      ? { label: 'GAIN', chipText: `+${fmtNum(moment.deltaTop)}` }
+      : { label: 'LIFT SESSIONS', value: String(moment.sessionCount) },
   ]
   const colW = contentW / 3
   cols.forEach((c, i) => {
     const cx = MARGIN + i * colW
     metaLabel(ctx, c.label, cx, statsY, { size: 22 })
     if (c.chipText) {
-      chip(ctx, c.chipText, cx + 2, statsY + 42, { color: ACCENT.pos, size: 24 })
+      chip(ctx, c.chipText, cx + 2, statsY + 42, { color: ACCENT.pos, size: 26 })
     } else {
       ctx.font = sans(54, 700)
       ctx.fillStyle = INK.text
@@ -198,8 +204,9 @@ export function renderPRCard(moment, formatKey = 'square') {
     }
   })
 
-  // Sparkline strip (story only), anchored above the footer.
-  if (showSpark) {
+  // Sparkline strip — same slot on both formats; the first-ever case gets an
+  // honest labeled state in the SAME slot (template never changes shape).
+  if (moment.history.length >= 2) {
     metaLabel(ctx, `EST. 1RM · LAST ${moment.history.length} SESSIONS`, MARGIN, sparkTop, {
       size: 22,
     })
@@ -209,13 +216,20 @@ export function renderPRCard(moment, formatKey = 'square') {
       { x: MARGIN, y: sparkTop + 36, w: contentW, h: sparkH - 72 },
       ACCENT.pr,
     )
-  } else if (story) {
-    metaLabel(ctx, 'NEW MOVEMENT — THE TREND STARTS HERE', MARGIN, sparkTop + sparkH / 2, {
-      size: 22,
-    })
+  } else {
+    metaLabel(ctx, 'EST. 1RM · TREND', MARGIN, sparkTop, { size: 22 })
+    const midY = sparkTop + 36 + (sparkH - 72) / 2
+    hairline(ctx, MARGIN, midY, w - MARGIN, INK.hairlineFaint)
+    ctx.beginPath()
+    ctx.arc(MARGIN + 10, midY, 8, 0, Math.PI * 2)
+    ctx.fillStyle = ACCENT.pr
+    ctx.fill()
+    ctx.font = mono(28, 600)
+    ctx.fillStyle = INK.dim
+    trackedText(ctx, `${fmtE1(moment.e1rm)} — BASELINE SET`, MARGIN + 34, midY + 10, 1)
   }
 
-  footer(ctx, w, h, `${moment.group} · SESSION ${moment.sessionCount}`, moment.unit)
+  footer(ctx, w, h, `${moment.group} · SINCE ${fmtShortDate(moment.history[0]?.date || moment.date)}`, moment.unit)
   return canvas
 }
 
@@ -296,20 +310,26 @@ export function renderSessionCard(moment, formatKey = 'square') {
   let maxRows = Math.floor(rowsSpace / rowH)
   const overflow = n > maxRows
   const shown = moment.exercises.slice(0, overflow ? maxRows - 1 : n)
-  // Distribute leftover space so the table breathes to the footer.
-  rowH = Math.min(rowH * 1.18, rowsSpace / (shown.length + (overflow ? 1 : 0)))
+  const rowCount = shown.length + (overflow ? 1 : 0)
+  // Height-aware: rows stretch toward the footer (story gets properly tall
+  // rows), and whatever can't be absorbed is split above/below the table so
+  // the frame never ends in a slab of dead black.
+  rowH = Math.min(roomyH * (story ? 1.9 : 1.25), rowsSpace / rowCount)
+  const tall = rowH > 120
+  y += Math.max(0, (rowsSpace - rowCount * rowH) / 2)
 
   for (const ex of shown) {
     const mid = y + rowH / 2
     accentTick(ctx, MARGIN, mid - 13, 26, groupColor(ex.group))
 
+    const rightSize = compact ? 30 : tall ? 38 : 32
     const rightStr = `${fmtNum(ex.topWeight)}×${ex.topReps}`
-    ctx.font = mono(compact ? 30 : 32, 600)
+    ctx.font = mono(rightSize, 600)
     const rightW = measureTracked(ctx, rightStr, 1)
     ctx.font = mono(21, 700)
     const prW = ex.isPR ? measureTracked(ctx, '● PR', 2) + 28 : 0
 
-    const nameSize = compact ? 32 : 36
+    const nameSize = compact ? 32 : tall ? 42 : 36
     const nameMax = contentW - rightW - (compact ? prW : 0) - 70
     ctx.font = sans(nameSize, 600)
     ctx.fillStyle = INK.text
@@ -319,23 +339,37 @@ export function renderSessionCard(moment, formatKey = 'square') {
     const nameY = compact ? mid + nameSize * 0.34 : mid - 4
     ctx.fillText(name, MARGIN + 24, nameY)
     if (!compact) {
-      metaLabel(ctx, `${ex.sets} SETS`, MARGIN + 24, mid + 28, { size: 20, color: INK.faint })
+      metaLabel(ctx, `${ex.sets} SETS`, MARGIN + 24, mid + (tall ? 36 : 28), {
+        size: 22,
+        color: INK.faint,
+      })
     }
 
-    ctx.font = mono(compact ? 30 : 32, 600)
+    ctx.font = mono(rightSize, 600)
     ctx.fillStyle = INK.text
     const rightY = compact ? mid + 10 : mid - 2
     trackedText(ctx, rightStr, w - MARGIN - (compact ? prW : 0), rightY, 1, 'right')
     if (ex.isPR) {
       ctx.font = mono(21, 700)
       ctx.fillStyle = ACCENT.pr
-      trackedText(ctx, '● PR', w - MARGIN, compact ? rightY : mid + 28, 2, 'right')
+      trackedText(ctx, '● PR', w - MARGIN, compact ? rightY : mid + (tall ? 36 : 28), 2, 'right')
     }
     hairline(ctx, MARGIN, y + rowH, w - MARGIN, INK.hairlineFaint)
     y += rowH
   }
   if (overflow) {
-    metaLabel(ctx, `+ ${n - shown.length} MORE`, MARGIN, y + rowH / 2 + 8, { size: 22 })
+    // The overflow row is a real table row, not an apologetic whisper: count
+    // on the left, the hidden work's aggregate volume on the right.
+    const hidden = moment.exercises.slice(shown.length)
+    const mid = y + rowH / 2
+    accentTick(ctx, MARGIN, mid - 13, 26, INK.faint)
+    ctx.font = sans(compact ? 32 : 36, 600)
+    ctx.fillStyle = INK.dim
+    ctx.fillText(`+ ${hidden.length} more exercises`, MARGIN + 24, mid + 12)
+    const hiddenVol = hidden.reduce((sum, ex) => sum + ex.volume, 0)
+    ctx.font = mono(compact ? 30 : 32, 600)
+    ctx.fillStyle = INK.dim
+    trackedText(ctx, `${fmtVol(hiddenVol)} VOL`, w - MARGIN, mid + 10, 1, 'right')
   }
 
   footer(ctx, w, h, `SESSION ${String(moment.sessionNumber).padStart(3, '0')}`, moment.unit)
@@ -369,10 +403,10 @@ export function renderProgressCard(moment, formatKey = 'square') {
   const hasDelta = moment.deltaE1 != null && Math.abs(moment.deltaE1) > 0.05
   const up = hasDelta && moment.deltaE1 > 0
   const cols = [
-    { label: 'EST. 1RM NOW', value: fmtNum(moment.currentE1), big: true },
-    { label: 'ALL-TIME BEST', value: fmtNum(moment.bestE1) },
+    { label: 'EST. 1RM NOW', value: fmtE1(moment.currentE1), big: true },
+    { label: 'ALL-TIME BEST', value: fmtE1(moment.bestE1) },
     hasDelta
-      ? { label: 'CHANGE', chipText: `${up ? '+' : '−'}${fmtNum(Math.abs(moment.deltaE1))} ${unit}`, up }
+      ? { label: 'CHANGE', chipText: `${up ? '+' : '−'}${fmtE1(Math.abs(moment.deltaE1))}`, up }
       : { label: 'SESSIONS', value: String(moment.totalSessions) },
   ]
   const colW = contentW / 3
@@ -401,41 +435,52 @@ export function renderProgressCard(moment, formatKey = 'square') {
     // Y figures on the right gutter, kept inside the chart's vertical range.
     const maxV = Math.max(...values)
     const minV = Math.min(...values)
-    ctx.font = mono(24, 500)
+    ctx.font = mono(30, 600)
     ctx.fillStyle = INK.dim
-    trackedText(ctx, fmtNum(maxV), MARGIN + chartBox.w + 24, chartTop + 26, 1)
-    trackedText(ctx, fmtNum(minV), MARGIN + chartBox.w + 24, chartTop + chartH, 1)
+    trackedText(ctx, fmtE1(maxV), MARGIN + chartBox.w + 24, chartTop + 30, 1)
+    trackedText(ctx, fmtE1(minV), MARGIN + chartBox.w + 24, chartTop + chartH, 1)
     // Axis row: dates + PR legend, one line.
-    metaLabel(ctx, fmtShortDate(moment.windowStart), MARGIN, axisY, { size: 22 })
+    metaLabel(ctx, fmtShortDate(moment.windowStart), MARGIN, axisY, { size: 24 })
     metaLabel(ctx, fmtShortDate(moment.windowEnd), MARGIN + chartBox.w, axisY, {
-      size: 22,
+      size: 24,
       align: 'right',
     })
     if (moment.series.some((p) => p.pr)) {
-      const cx = w / 2 - 60
+      const cx = w / 2 - 70
       ctx.beginPath()
-      ctx.arc(cx, axisY - 8, 6, 0, Math.PI * 2)
+      ctx.arc(cx, axisY - 9, 7, 0, Math.PI * 2)
       ctx.strokeStyle = ACCENT.pr
       ctx.lineWidth = 3
       ctx.fillStyle = INK.bg
       ctx.fill()
       ctx.stroke()
-      metaLabel(ctx, 'PR SESSION', cx + 18, axisY, { size: 21 })
+      metaLabel(ctx, 'PR SESSION', cx + 20, axisY, { size: 24 })
     }
   } else {
+    // One session is a baseline, not a trend — say so with a labeled marker
+    // (PR-ring encoding matches every other chart: a first session IS a PR).
+    const midY = chartTop + chartH / 2
     ctx.strokeStyle = INK.hairlineFaint
     ctx.lineWidth = 1.5
-    for (const fy of [0, 0.5, 1]) {
-      ctx.beginPath()
-      ctx.moveTo(MARGIN, chartTop + chartH * fy)
-      ctx.lineTo(MARGIN + chartBox.w, chartTop + chartH * fy)
-      ctx.stroke()
-    }
     ctx.beginPath()
-    ctx.arc(MARGIN + chartBox.w / 2, chartTop + chartH / 2, 8, 0, Math.PI * 2)
-    ctx.fillStyle = color
+    ctx.moveTo(MARGIN, midY)
+    ctx.lineTo(MARGIN + chartBox.w, midY)
+    ctx.stroke()
+    const dotX = MARGIN + 96
+    ctx.beginPath()
+    ctx.arc(dotX, midY, 11, 0, Math.PI * 2)
+    ctx.fillStyle = INK.bg
     ctx.fill()
-    metaLabel(ctx, 'FIRST SESSION LOGGED — TREND STARTS HERE', MARGIN, axisY, { size: 22 })
+    ctx.strokeStyle = ACCENT.pr
+    ctx.lineWidth = 4
+    ctx.stroke()
+    ctx.font = mono(34, 600)
+    ctx.fillStyle = INK.text
+    trackedText(ctx, `${fmtE1(moment.currentE1)} EST. 1RM`, dotX + 34, midY + 12, 1)
+    metaLabel(ctx, `BASELINE · ${fmtShortDate(moment.windowEnd)}`, dotX + 34, midY + 56, {
+      size: 24,
+    })
+    metaLabel(ctx, 'FIRST SESSION LOGGED — TREND STARTS HERE', MARGIN, axisY, { size: 24 })
   }
 
   footer(
