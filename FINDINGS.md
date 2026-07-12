@@ -142,6 +142,17 @@ STATUS.md tracks the live phase log.
   enforces non-negativity — historical data is sacred).
 - **README says Vercel; the repo actually deploys to GitHub Pages** via
   `.github/workflows/deploy.yml` on pushes to `main`. Treated Pages as truth.
+- **PR semantics unchanged.** "Ignore rep-range-switch artifacts" was considered:
+  current PR flags are precisely defined (all-time top-set weight record OR
+  all-time e1RM record, per machine) and the e1RM criterion already normalizes
+  across rep ranges. Any "artifact filter" would make PRs fuzzier and rewrite
+  which historical sessions show trophies. Left alone deliberately; the math is
+  independently verified against a brute-force recompute in tests and by two
+  attacker agents.
+- **Same-document external writes after the first save** (devtools/extensions
+  writing the key mid-session) remain last-write-wins — no storage event fires
+  for them and state merging is out of scope for a single-user app. Cross-tab
+  operation is safe via storage events; the startup window is closed.
 
 ## Dead code / lies removed
 
@@ -166,6 +177,18 @@ STATUS.md tracks the live phase log.
   permanent fixture (`tests/fixtures/backup-v1-real.json`, photos stubbed).
 - Unknown keys on records survive normalization, so a *newer* app version's
   data degrades gracefully in an older one.
+
+## Level-up (shipped after the audit went green, then re-attacked)
+
+- **Persistent rest timer.** The timer used to live inside each exercise card —
+  scrolling to the next machine or refreshing killed a running rest. Now a
+  single app-wide countdown (localStorage-backed) that survives navigation and
+  refresh, shows on every card, beeps exactly once, and discards targets that
+  expired while the page was closed. Zero added taps.
+- **Undo for set deletion.** Delete-set is one tap with no confirm (by design —
+  confirms would slow entry). A 6-second "Set deleted — Undo" snackbar restores
+  the exact set, recreating the pruned day workout if needed, collision-safe on
+  order, idempotent against double-taps.
 
 ## Test suite
 
