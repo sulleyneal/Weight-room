@@ -29,8 +29,10 @@ import {
   IconDownload,
   IconChart,
   IconList,
+  IconSparkle,
 } from '../components/Icons.jsx'
 import RoutinesModal from '../components/RoutinesModal.jsx'
+import ImportPlanModal from '../components/ImportPlanModal.jsx'
 import AskClaudeButton from '../components/AskClaudeButton.jsx'
 import { useWakeLock } from '../hooks/useWakeLock.js'
 
@@ -43,6 +45,7 @@ export default function LogWorkout({ date: routeDate }) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [routinesOpen, setRoutinesOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   // Machines explicitly added to this session that don't yet have sets.
   const [addedMachineIds, setAddedMachineIds] = useState([])
   // Program state for this session: per-machine targets + the program's order.
@@ -132,13 +135,11 @@ export default function LogWorkout({ date: routeDate }) {
     downloadJSON(`weight-room-${date}.json`, payload)
   }
 
-  // Preload a program's exercises (in order, with targets) into today's session.
-  function startRoutine(items) {
-    const valid = items.filter((it) =>
-      state.machines.some((m) => m.id === it.machineId && !m.archived),
-    )
-    const ids = valid.map((it) => it.machineId)
-    const targets = Object.fromEntries(valid.map((it) => [it.machineId, it]))
+  // Preload items ({ machineId, sets, repLow, repHigh, weight? }) into today's
+  // session, in order, with their targets.
+  function preloadSession(items) {
+    const ids = items.map((it) => it.machineId)
+    const targets = Object.fromEntries(items.map((it) => [it.machineId, it]))
     const today = todayISO()
     if (date === today) {
       setAddedMachineIds((prev) => [...new Set([...prev, ...ids])])
@@ -148,6 +149,18 @@ export default function LogWorkout({ date: routeDate }) {
       pendingPreloadRef.current = { ids, targets, order: ids }
       setDate(today)
     }
+  }
+
+  function startRoutine(items) {
+    preloadSession(
+      items.filter((it) => state.machines.some((m) => m.id === it.machineId && !m.archived)),
+    )
+  }
+
+  // Items from an imported Claude plan reference machines the import modal just
+  // matched or created — some aren't in this render's state yet, so no filter.
+  function startImportedPlan(items) {
+    preloadSession(items)
   }
 
   /**
@@ -218,6 +231,9 @@ export default function LogWorkout({ date: routeDate }) {
         <button className="btn-ghost" onClick={() => setRoutinesOpen(true)}>
           <IconList size={20} /> Routines
         </button>
+        <button className="btn-ghost col-span-2 text-brand-400" onClick={() => setImportOpen(true)}>
+          <IconSparkle size={20} /> Import Claude’s plan
+        </button>
       </div>
 
       {sessionMachineIds.length === 0 && (
@@ -277,6 +293,12 @@ export default function LogWorkout({ date: routeDate }) {
         onStart={startRoutine}
       />
 
+      <ImportPlanModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImport={startImportedPlan}
+      />
+
       <MachinePicker
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
@@ -328,15 +350,26 @@ function MachineBlock({ machine, date, unit, store, target }) {
   )
 
   const lastTodaySet = sets[sets.length - 1] || null
-  const seedSet = lastTodaySet || lastEverSet
 
   const isBodyweight = machine.type === 'Bodyweight'
   const bodyweight = state.settings.bodyweight || 0
+  // A target with a weight comes from an imported Claude plan: its numbers seed
+  // the steppers ahead of history (today's own logged sets still win).
+  const plannedWeight = target?.weight != null && target.weight > 0 ? target.weight : null
   const defaultWeight =
-    seedSet?.weight ?? (isBodyweight && bodyweight > 0 ? bodyweight : unit === 'kg' ? 20 : 45)
+    lastTodaySet?.weight ??
+    plannedWeight ??
+    lastEverSet?.weight ??
+    (isBodyweight && bodyweight > 0 ? bodyweight : unit === 'kg' ? 20 : 45)
 
   const [weight, setWeight] = useState(defaultWeight)
-  const [reps, setReps] = useState(seedSet?.reps ?? repRange?.low ?? 10)
+  const [reps, setReps] = useState(
+    lastTodaySet?.reps ??
+      (plannedWeight != null ? repRange?.low : null) ??
+      lastEverSet?.reps ??
+      repRange?.low ??
+      10,
+  )
   // Bumped after each logged set; RestTimer auto-starts on the change.
   const [restToken, setRestToken] = useState(0)
 
@@ -402,6 +435,14 @@ function MachineBlock({ machine, date, unit, store, target }) {
             <span className="font-semibold text-slate-300">
               {target.sets} × {repRange ? (repRange.low === repRange.high ? repRange.high : `${repRange.low}–${repRange.high}`) : 'any'}
             </span>
+            {plannedWeight != null && (
+              <>
+                {' @ '}
+                <span className="font-semibold text-brand-400">
+                  {fmtWeight(plannedWeight, unit)}
+                </span>
+              </>
+            )}
           </span>
           {rangeTopped ? (
             <span className="font-bold text-green-400">Range topped — add weight next time ▲</span>

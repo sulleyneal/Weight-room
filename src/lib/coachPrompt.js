@@ -10,6 +10,7 @@ import {
   fmtDate,
 } from './metrics.js'
 import { unitLabel, weightStep } from './units.js'
+import { MUSCLE_GROUPS } from '../data/seed.js'
 
 function fmtW(value, unit) {
   const rounded = Math.round((Number(value) || 0) * 10) / 10
@@ -184,6 +185,32 @@ export function buildCoachPrompt(state) {
       `2. For each exercise in that next workout: a specific weight and rep target in ${unitLabel(unit)} (my plates/stack move in ${weightStep(unit)} ${unitLabel(unit)} steps), and whether I should add weight, add reps, or deload.`,
       '3. Call out anything that looks stalled or imbalanced, with one concrete fix.',
       'Keep it concise and specific — a short plan I can follow at the gym, not an essay.',
+    ].join('\n'),
+  )
+
+  // The app parses this block back out of the reply (see lib/planImport.js),
+  // so the next workout can be preloaded with one paste.
+  const example = {
+    weightRoomPlan: 1,
+    workout: 'Session name',
+    exercises: [
+      {
+        name: 'Exercise name',
+        sets: 3,
+        reps: '8-10',
+        weight: unit === 'kg' ? 60 : 135,
+      },
+    ],
+  }
+  out.push('')
+  out.push('## Import block (required)')
+  out.push(
+    [
+      'End your reply with a single fenced ```json code block containing the recommended next workout, so I can import it into my tracker. Exact shape (no comments, no trailing commas):',
+      '```json',
+      JSON.stringify(example, null, 2),
+      '```',
+      `"weight" is the working weight in ${unitLabel(unit)} as a plain number; "reps" is a number or a "low-high" range string. List exercises in the order I should do them, and use my exercise names exactly as written above. Only introduce a new exercise if essential — then also give it a "muscleGroup", one of: ${MUSCLE_GROUPS.join(', ')}.`,
     ].join('\n'),
   )
 
