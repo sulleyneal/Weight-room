@@ -90,6 +90,24 @@ STATUS.md tracks the live phase log.
 14. **Settings bodyweight accepted negatives** until the next reload repaired
     it. *Fixed:* clamped immediately (0–2000).
 
+## Attack pass #3 findings (fixed)
+
+15. **MEDIUM — delete-machine × pending-undo ghost.** Delete a set (undo
+    snackbar appears) → delete the entire exercise → return and tap Undo: the
+    set resurrected for a machine that no longer exists — invisible on the log
+    page, unremovable via UI, inflating volume/PR/streak stats, and making
+    Records self-contradictory. Enabled by the snackbar's dismiss timer pausing
+    while the log page was unmounted. *Fixed three layers deep:* `RESTORE_SET`
+    refuses when the set's machine is gone; deleting a machine (or importing a
+    backup / resetting) invalidates a pending undo; the undo window expires on
+    wall clock in the store provider, not in the component.
+
+Pass #3 also confirmed: every pass-1/2 fix held under re-attack (date injection
+neutralized at all four layers with no reachable render crash, timezone nav
+exact in Auckland, 15-click bursts clean, two-tab simultaneous logging
+lossless, round-trip byte-identical, quota-full shows the red banner and
+recovers, offline works, no tap target under 32px, huge-state pages ~60ms).
+
 ## Hardening (no observed failure, but fragile)
 
 - **Import validation was shallow.** Any `{machines: […]}` object entered the
