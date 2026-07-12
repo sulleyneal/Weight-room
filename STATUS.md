@@ -1,0 +1,29 @@
+# Audit status
+
+Live progress log for the adversarial audit & level-up pass. See FINDINGS.md
+(written at the end of the audit) for the full inventory of findings.
+
+**Current phase:** 1 — storage-layer hardening + test infrastructure
+**Last attacker verdict:** none yet (first attack pass runs after Phase 1)
+**Biggest open gap:** no tests exist; corrupt-localStorage path silently reseeds and overwrites user data
+
+## Plan of record
+
+1. Extract import/export/normalize logic into `lib/persistence.js` (pure, testable), harden it:
+   corrupt-storage recovery stash, cross-tab `storage` adoption, save-failure surfacing,
+   deep normalization on load/import. Backup format stays v1 byte-compatible.
+2. Vitest suite: persistence, migrations, backup round-trip (with a real pre-change backup
+   as fixture), all stat math, plan-import parser. `npm test`.
+3. Fix correctness bugs from the audit read (duplicate-date workouts, epley1RM(w,1),
+   dangling routine refs on machine delete, missing fields on imported/copied records).
+4. Code-split Recharts routes; Lighthouse mobile ≥ 90 on dashboard with 5-year synthetic data.
+5. Build → attack → fix loop with fresh-context attacker agents driving the real app in a
+   browser until a full hostile pass finds nothing.
+6. Level-up (post-green): persistent rest timer, undo for set deletion, PR logic resilient
+   to rep-range switches — each addition goes through the attack loop.
+
+## Phase log
+
+- 2026-07-12: Full codebase read complete (every file). Real backup (13 machines / 8
+  workouts / 140 sets / 2 routines / 12 photos) inspected and stashed as the round-trip
+  fixture. Risk list ranked; plan posted.
