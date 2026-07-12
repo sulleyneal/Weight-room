@@ -1,11 +1,23 @@
-import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react'
 import {
   emptyState,
   loadState,
   saveState,
   buildBackupPayload,
+  parseBackup,
+  mergeDayImport,
+  normalizeState,
   normalizeRoutine,
-  normalizeRoutines,
+  takeStartupWarning,
+  STORAGE_KEY,
   SCHEMA_VERSION,
 } from '../lib/persistence.js'
 import { isSyncEnabled, pushBackup } from '../lib/gistSync.js'
@@ -51,6 +63,11 @@ function reducer(state, action) {
         machines: state.machines.filter((m) => m.id !== action.id),
         sets,
         workouts,
+        // Programs must not keep pointing at a machine that no longer exists.
+        routines: state.routines.map((r) => ({
+          ...r,
+          items: r.items.filter((it) => it.machineId !== action.id),
+        })),
       }
     }
 
@@ -120,6 +137,9 @@ const StoreContext = createContext(null)
 export function StoreProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
   const didHydrate = useRef(false)
+  // User-facing data-safety notice: { tone: 'warn' | 'error', msg }.
+  const [notice, setNotice] = useState(null)
+  const saveFailedRef = useRef(false)
 
   // Hydrate once on mount: load saved data, or seed a fresh library.
   useEffect(() => {
@@ -132,13 +152,42 @@ export function StoreProvider({ children }) {
       const fresh = { ...emptyState(), machines: seedMachines() }
       dispatch({ type: 'HYDRATE', payload: fresh })
     }
+    const warning = takeStartupWarning()
+    if (warning) setNotice({ tone: 'warn', msg: warning })
   }, [])
 
-  // Persist on any data change (after hydration).
+  // Persist on any data change (after hydration). A failed write (storage
+  // full, private mode…) must never be silent — the user is still logging.
   useEffect(() => {
     if (!state.loaded) return
-    saveState(state)
+    const ok = saveState(state)
+    if (!ok && !saveFailedRef.current) {
+      saveFailedRef.current = true
+      setNotice({
+        tone: 'error',
+        msg: 'Saving to this device failed — storage may be full. Your changes only live in this tab right now: export a backup from Settings before closing.',
+      })
+    } else if (ok && saveFailedRef.current) {
+      saveFailedRef.current = false
+      setNotice(null)
+    }
   }, [state.machines, state.workouts, state.sets, state.routines, state.settings, state.loaded])
+
+  // Adopt changes written by another tab/window (same data, e.g. PWA + browser
+  // tab both open at the gym). Without this, the stale tab's next save would
+  // silently clobber the other tab's sets.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== STORAGE_KEY || e.newValue == null) return
+      try {
+        dispatch({ type: 'HYDRATE', payload: normalizeState(JSON.parse(e.newValue)) })
+      } catch {
+        /* another writer left something unreadable; keep our in-memory state */
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
 
   // Cloud sync (opt-in): quietly push a full backup a few seconds after the
   // data settles. No-op unless the user connected a gist token in Settings.
@@ -252,7 +301,6 @@ export function StoreProvider({ children }) {
        */
       copyLastWorkoutForMachine(machineId, targetWorkoutId) {
         // Find the latest workout date (other than the target) that has sets for this machine.
-        const targetWorkout = state.workouts.find((w) => w.id === targetWorkoutId)
         const candidates = state.workouts
           .filter((w) => w.id !== targetWorkoutId)
           .filter((w) => state.sets.some((s) => s.workoutId === w.id && s.machineId === machineId))
@@ -272,9 +320,9 @@ export function StoreProvider({ children }) {
           weight: s.weight,
           reps: s.reps,
           order: baseOrder + i,
+          t: Date.now(), // counts toward this session's elapsed time like any logged set
         }))
         if (newSets.length) dispatch({ type: 'ADD_SETS', sets: newSets })
-        void targetWorkout
         return newSets.length
       },
 
@@ -545,23 +593,9 @@ export function StoreProvider({ children }) {
       },
 
       async importData(payload) {
-        if (payload?.type === 'workout') {
-          throw new Error("That's a single-day file — use “Import a day” instead.")
-        }
-        const data = payload?.data || payload
-        if (!data || !Array.isArray(data.machines)) {
-          throw new Error('Invalid backup file: missing machines.')
-        }
-        const next = {
-          ...emptyState(),
-          machines: data.machines,
-          workouts: data.workouts || [],
-          sets: data.sets || [],
-          routines: normalizeRoutines(data.routines),
-          settings: { ...emptyState().settings, ...(data.settings || {}) },
-        }
-        await idb.replaceAllPhotos(payload?.photos || {})
-        dispatch({ type: 'REPLACE_ALL', payload: next })
+        const { data, photos } = parseBackup(payload)
+        await idb.replaceAllPhotos(photos)
+        dispatch({ type: 'REPLACE_ALL', payload: data })
       },
 
       /**
@@ -572,79 +606,9 @@ export function StoreProvider({ children }) {
        * created if none exists). Returns a summary for user feedback.
        */
       importWorkout(payload) {
-        const wk = payload?.workout
-        if (!payload || payload.type !== 'workout' || !wk || !Array.isArray(wk.machines)) {
-          throw new Error('Not a single-day workout file.')
-        }
-        const date = wk.date
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
-          throw new Error('File is missing a valid workout date.')
-        }
-
-        const machines = [...state.machines]
-        const norm = (s) => (s || '').trim().toLowerCase()
-        const findMachine = (m) => {
-          let found = machines.find((x) => x.id === m.id)
-          if (found) return found
-          return (
-            machines.find(
-              (x) => norm(x.name) === norm(m.name) && norm(x.model) === norm(m.model),
-            ) || null
-          )
-        }
-
-        const workouts = [...state.workouts]
-        let workout = workouts.find((w) => w.date === date)
-        const dayHadData =
-          Boolean(workout) && state.sets.some((s) => s.workoutId === workout.id)
-        if (!workout) {
-          workout = { id: uid('w'), date }
-          workouts.push(workout)
-        }
-
-        const sets = [...state.sets]
-        let machinesAdded = 0
-        let machinesMatched = 0
-        let setsAdded = 0
-
-        for (const m of wk.machines) {
-          let target = findMachine(m)
-          if (!target) {
-            target = {
-              id: uid('m'),
-              name: (m.name || 'Untitled Machine').trim(),
-              model: (m.model || '').trim(),
-              muscleGroup: m.muscleGroup || 'Other',
-              notes: (m.notes || '').trim(),
-              hasPhoto: false,
-              archived: false,
-              createdAt: Date.now(),
-            }
-            machines.push(target)
-            machinesAdded++
-          } else {
-            machinesMatched++
-          }
-          const incoming = Array.isArray(m.sets) ? [...m.sets] : []
-          incoming.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-          let order = sets.filter(
-            (s) => s.workoutId === workout.id && s.machineId === target.id,
-          ).length
-          for (const s of incoming) {
-            sets.push({
-              id: uid('s'),
-              workoutId: workout.id,
-              machineId: target.id,
-              weight: Number(s.weight) || 0,
-              reps: Number(s.reps) || 0,
-              order: order++,
-            })
-            setsAdded++
-          }
-        }
-
-        dispatch({ type: 'REPLACE_ALL', payload: { ...state, machines, workouts, sets } })
-        return { date, machinesAdded, machinesMatched, setsAdded, dayHadData }
+        const { state: next, summary } = mergeDayImport(state, payload)
+        dispatch({ type: 'REPLACE_ALL', payload: next })
+        return summary
       },
 
       async resetAll() {
@@ -657,6 +621,10 @@ export function StoreProvider({ children }) {
       loadSampleHistory() {
         const machines = state.machines.filter((m) => !m.archived)
         if (!machines.length) return
+        // Dates must reuse an existing workout — the app treats date as the
+        // workout key, so creating a second record for the same day would
+        // split that day's data.
+        const workoutIdByDate = new Map(state.workouts.map((w) => [w.date, w.id]))
         const workouts = []
         const sets = []
         // 6 sessions over the last ~3 weeks, 3 machines each.
@@ -665,8 +633,12 @@ export function StoreProvider({ children }) {
           const d = new Date(today)
           d.setDate(today.getDate() - session * 3)
           const date = d.toISOString().slice(0, 10)
-          const workoutId = uid('w')
-          workouts.push({ id: workoutId, date })
+          let workoutId = workoutIdByDate.get(date)
+          if (!workoutId) {
+            workoutId = uid('w')
+            workoutIdByDate.set(date, workoutId)
+            workouts.push({ id: workoutId, date })
+          }
           const picks = machines.slice((session * 3) % machines.length).slice(0, 3)
           const chosen = picks.length >= 3 ? picks : machines.slice(0, 3)
           chosen.forEach((m, mi) => {
@@ -695,7 +667,10 @@ export function StoreProvider({ children }) {
     }
   }, [state])
 
-  const value = useMemo(() => ({ state, ...actions }), [state, actions])
+  const value = useMemo(
+    () => ({ state, notice, dismissNotice: () => setNotice(null), ...actions }),
+    [state, notice, actions],
+  )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }

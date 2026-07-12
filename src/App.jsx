@@ -11,7 +11,7 @@ import RecordsPage from './pages/RecordsPage.jsx'
 
 export default function App() {
   const path = useHashRoute()
-  const { state } = useStore()
+  const { state, notice, dismissNotice } = useStore()
 
   if (!state.loaded) {
     return (
@@ -24,7 +24,28 @@ export default function App() {
   return (
     <div className="min-h-full flex flex-col">
       <main id="app-main" className="flex-1 overflow-y-auto pb-28 safe-top">
-        <div className="max-w-lg mx-auto px-4 pt-5">{renderRoute(path)}</div>
+        <div className="max-w-lg mx-auto px-4 pt-5">
+          {notice && (
+            <div
+              role="alert"
+              className={`card p-3 mb-4 text-sm flex items-start gap-2 ${
+                notice.tone === 'error'
+                  ? 'border-red-500/50 text-red-300'
+                  : 'border-yellow-500/50 text-yellow-200'
+              }`}
+            >
+              <span className="flex-1">{notice.msg}</span>
+              <button
+                className="text-slate-400 hover:text-slate-200 font-bold px-1"
+                onClick={dismissNotice}
+                aria-label="Dismiss notice"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {renderRoute(path)}
+        </div>
       </main>
       <BottomNav path={path} />
     </div>
