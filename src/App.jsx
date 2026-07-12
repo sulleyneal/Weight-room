@@ -12,6 +12,8 @@ import RecordsPage from './pages/RecordsPage.jsx'
 // dashboard and the log-a-set path never pay for it.
 const ProgressPage = lazy(() => import('./pages/ProgressPage.jsx'))
 const MachineDetail = lazy(() => import('./pages/MachineDetail.jsx'))
+// QA harness for the share cards (unlinked route; also handy on a real phone).
+const ShareLab = lazy(() => import('./pages/ShareLab.jsx'))
 
 // A crash in one page must never blank the whole app (the data underneath is
 // fine — losing the nav would trap the user on the broken screen). Resets on
@@ -128,6 +130,8 @@ function renderRoute(path) {
       return <SettingsPage />
     case '/records':
       return <RecordsPage />
+    case '/share-lab':
+      return <ShareLab />
     default:
       return <Dashboard />
   }

@@ -96,6 +96,12 @@ export function buildSessionMoment(state, date) {
     if (best < Math.ceil(exercises.length / 2)) programName = null
   }
 
+  // Lifetime session number up to this date — the receipt-style footer stamp.
+  const loggedIds = new Set(state.sets.map((s) => s.workoutId))
+  const sessionNumber = state.workouts.filter(
+    (w) => loggedIds.has(w.id) && w.date <= date,
+  ).length
+
   return {
     date,
     unit: state.settings.unit,
@@ -104,6 +110,7 @@ export function buildSessionMoment(state, date) {
     totalSets: daySets.length,
     totalVolume,
     prCount,
+    sessionNumber,
     exercises,
   }
 }
@@ -151,8 +158,14 @@ export function buildPRMoments(state, date) {
       sessionCount: idx + 1,
     })
   }
-  // Biggest e1RM jump first — the headline PR.
-  out.sort((a, b) => (b.deltaE1 ?? Infinity) - (a.deltaE1 ?? Infinity))
+  // Headline order: real records first (biggest e1RM jump wins), first-ever
+  // sessions last — "first time on a machine" is not the story of the day.
+  out.sort((a, b) => {
+    const aFirst = a.prevBestTop == null && a.prevBestE1 == null
+    const bFirst = b.prevBestTop == null && b.prevBestE1 == null
+    if (aFirst !== bFirst) return aFirst ? 1 : -1
+    return (b.deltaE1 ?? 0) - (a.deltaE1 ?? 0) || b.e1rm - a.e1rm
+  })
   return out
 }
 
