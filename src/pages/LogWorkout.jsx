@@ -378,7 +378,12 @@ function MachineBlock({ machine, date, unit, store, target }) {
     setRestToken((t) => t + 1)
   }
 
+  // A 0-rep set is always a mis-tap (cleared field / stepper at 0) — block it
+  // rather than pollute history and PR math with phantom sets.
+  const repsValid = (Number(reps) || 0) > 0
+
   function addSet() {
+    if (!repsValid) return
     const workoutId = store.ensureWorkout(date)
     store.addSet({ workoutId, machineId: machine.id, weight, reps })
     afterSetLogged()
@@ -515,7 +520,7 @@ function MachineBlock({ machine, date, unit, store, target }) {
           />
           <NumberStepper label="Reps" value={reps} onChange={setReps} step={1} min={0} />
         </div>
-        <button className="btn-primary w-full" onClick={addSet}>
+        <button className="btn-primary w-full" onClick={addSet} disabled={!repsValid}>
           <IconPlus size={20} /> Add set
         </button>
         <div className="grid grid-cols-2 gap-2">
