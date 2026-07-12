@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react'
-import { useHashRoute, matchRoute } from './router.jsx'
+import { Component, lazy, Suspense } from 'react'
+import { useHashRoute, matchRoute, navigate } from './router.jsx'
 import { useStore } from './store/StoreContext.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -12,6 +12,50 @@ import RecordsPage from './pages/RecordsPage.jsx'
 // dashboard and the log-a-set path never pay for it.
 const ProgressPage = lazy(() => import('./pages/ProgressPage.jsx'))
 const MachineDetail = lazy(() => import('./pages/MachineDetail.jsx'))
+
+// A crash in one page must never blank the whole app (the data underneath is
+// fine — losing the nav would trap the user on the broken screen). Resets on
+// navigation so other pages stay reachable.
+class RouteErrorBoundary extends Component {
+  state = { error: null }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  componentDidCatch(error) {
+    console.error('Page crashed:', error)
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.path !== this.props.path && this.state.error) {
+      this.setState({ error: null })
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="card p-6 text-center">
+          <p className="font-bold mb-1">This page hit an error.</p>
+          <p className="text-sm text-slate-400 mb-4">
+            Your data is safe — this screen just failed to render.
+          </p>
+          <button
+            className="btn-primary mx-auto"
+            onClick={() => {
+              this.setState({ error: null })
+              navigate('/')
+            }}
+          >
+            Back to dashboard
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 export default function App() {
   const path = useHashRoute()
@@ -48,13 +92,17 @@ export default function App() {
               </button>
             </div>
           )}
-          <Suspense
-            fallback={
-              <div className="py-16 text-center text-slate-500 animate-pulse text-sm">Loading…</div>
-            }
-          >
-            {renderRoute(path)}
-          </Suspense>
+          <RouteErrorBoundary path={path}>
+            <Suspense
+              fallback={
+                <div className="py-16 text-center text-slate-500 animate-pulse text-sm">
+                  Loading…
+                </div>
+              }
+            >
+              {renderRoute(path)}
+            </Suspense>
+          </RouteErrorBoundary>
         </div>
       </main>
       <BottomNav path={path} />

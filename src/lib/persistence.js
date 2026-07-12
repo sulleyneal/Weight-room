@@ -68,6 +68,11 @@ function str(v, fallback = '') {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
+/** True for a real calendar date in ISO shape (rejects "2026-13-99"). */
+function isValidISODate(d) {
+  return DATE_RE.test(d) && Number.isFinite(new Date(d).getTime())
+}
+
 // ---- Deep normalization ----------------------------------------------------
 
 /**
@@ -135,18 +140,22 @@ export function normalizeState(data) {
     .filter(isObj)
     .map(normalizeMachine)
 
-  // Workouts: coerce, then merge duplicates by date (first one wins).
+  // Workouts: coerce, then merge duplicates by date (first one wins). A
+  // workout with an invalid date is dropped from the list — it can't render
+  // anywhere and poisons every consumer that parses dates (its sets are kept
+  // in the document as orphans, so no set data is destroyed).
   const workoutIdRemap = new Map()
   const byDate = new Map()
   const workouts = []
   for (const raw of Array.isArray(src.workouts) ? src.workouts : []) {
     if (!isObj(raw)) continue
     const w = { ...raw, id: raw.id || uid('w'), date: str(raw.date) }
-    if (DATE_RE.test(w.date) && byDate.has(w.date)) {
+    if (!isValidISODate(w.date)) continue
+    if (byDate.has(w.date)) {
       workoutIdRemap.set(w.id, byDate.get(w.date).id)
       continue
     }
-    if (DATE_RE.test(w.date)) byDate.set(w.date, w)
+    byDate.set(w.date, w)
     workouts.push(w)
   }
 
@@ -390,9 +399,14 @@ export function mergeDayImport(state, payload, now = Date.now()) {
     }
     const incoming = Array.isArray(m.sets) ? m.sets.filter(isObj) : []
     incoming.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    let order = sets.filter(
-      (s) => s.workoutId === workout.id && s.machineId === target.id,
-    ).length
+    // max(order)+1, not count: after a middle-set delete, count would collide
+    // with a surviving order.
+    let order = 0
+    for (const s of sets) {
+      if (s.workoutId === workout.id && s.machineId === target.id) {
+        order = Math.max(order, (s.order ?? 0) + 1)
+      }
+    }
     for (const s of incoming) {
       sets.push({
         id: uid('s'),

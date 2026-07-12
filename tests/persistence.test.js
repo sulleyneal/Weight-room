@@ -67,6 +67,24 @@ describe('normalizeState', () => {
     expect(s.sets.find((x) => x.id === 's3').workoutId).toBe('w3')
   })
 
+  it('drops invalid-date workouts (they poison every date consumer) but keeps their sets as orphans', () => {
+    const s = normalizeState({
+      machines: [],
+      workouts: [
+        { id: 'w1', date: 'banana' },
+        { id: 'w2', date: '2026-13-99' }, // ISO shape but not a real calendar date
+        { id: 'w3', date: '2026-07-01' },
+      ],
+      sets: [
+        { id: 's1', workoutId: 'w1', machineId: 'm1', weight: 100, reps: 5 },
+        { id: 's2', workoutId: 'w3', machineId: 'm1', weight: 100, reps: 5 },
+      ],
+    })
+    expect(s.workouts.map((w) => w.id)).toEqual(['w3'])
+    // no set data destroyed — s1 remains in the document (orphaned, ignored by metrics)
+    expect(s.sets.map((x) => x.id)).toEqual(['s1', 's2'])
+  })
+
   it('preserves unknown extra keys on records (forward compatibility)', () => {
     const s = normalizeState({
       machines: [{ id: 'm1', name: 'X', futureField: 'keep me' }],
@@ -252,6 +270,26 @@ describe('mergeDayImport', () => {
     expect(created.type).toBe('Machine')
     expect(created.archived).toBe(false)
     expect(created.hasPhoto).toBe(false)
+  })
+
+  it('assigns orders past a deleted middle set (max+1, not count)', () => {
+    const state = {
+      ...baseState(),
+      // Orders 0 and 2 survive after the middle set was deleted.
+      sets: [
+        { id: 's1', workoutId: 'w1', machineId: 'm1', weight: 100, reps: 10, order: 0 },
+        { id: 's3', workoutId: 'w1', machineId: 'm1', weight: 100, reps: 8, order: 2 },
+      ],
+    }
+    const payload = dayFile('2026-07-01', [
+      { id: 'm1', name: 'Chest Press', model: 'RS-2301', sets: [{ weight: 110, reps: 8 }] },
+    ])
+    const { state: next } = mergeDayImport(state, payload)
+    const orders = next.sets
+      .filter((s) => s.workoutId === 'w1' && s.machineId === 'm1')
+      .map((s) => s.order)
+    expect(new Set(orders).size).toBe(orders.length) // no collisions
+    expect(Math.max(...orders)).toBe(3)
   })
 
   it('appends to an existing day without touching its prior sets', () => {

@@ -37,12 +37,23 @@ import ImportPlanModal from '../components/ImportPlanModal.jsx'
 import AskClaudeButton from '../components/AskClaudeButton.jsx'
 import { useWakeLock } from '../hooks/useWakeLock.js'
 
+// Only real, non-future ISO dates may become a workout key: the route param
+// and the date input are both attacker-controllable ("#/log/banana",
+// typed "2030-01-01") and a bad date poisons every page that parses it.
+function sanitizeDate(d) {
+  const today = todayISO()
+  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(new Date(d).getTime())) {
+    return today
+  }
+  return d > today ? today : d
+}
+
 export default function LogWorkout({ date: routeDate }) {
   const store = useStore()
   const { state } = store
   const unit = state.settings.unit
 
-  const [date, setDate] = useState(routeDate || todayISO())
+  const [date, setDate] = useState(() => sanitizeDate(routeDate))
   const [pickerOpen, setPickerOpen] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [routinesOpen, setRoutinesOpen] = useState(false)
@@ -56,7 +67,7 @@ export default function LogWorkout({ date: routeDate }) {
   const pendingPreloadRef = useRef(null)
 
   useEffect(() => {
-    if (routeDate) setDate(routeDate)
+    if (routeDate) setDate(sanitizeDate(routeDate))
   }, [routeDate])
 
   // Reset session-scoped state when the date changes — unless a preload is pending.
@@ -210,7 +221,7 @@ export default function LogWorkout({ date: routeDate }) {
             type="date"
             value={date}
             max={todayISO()}
-            onChange={(e) => setDate(e.target.value || todayISO())}
+            onChange={(e) => setDate(sanitizeDate(e.target.value))}
             className="input pl-10 text-center"
           />
         </label>

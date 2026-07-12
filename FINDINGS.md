@@ -66,6 +66,30 @@ STATUS.md tracks the live phase log.
 10. **Training-load band rounding.** `span` was rounded independently of
     `low`/`high`, so the plotted band top drifted 1 unit off `high`. *Fixed.*
 
+## Attack pass #2 findings (all fixed)
+
+11. **HIGH — a garbage date in the `#/log/:date` route blanked the app.**
+    `#/log/banana` + one set wrote `date: "banana"` as a workout key; it
+    survived normalization, threw `RangeError` on the Records page, and with no
+    error boundary the entire tree (nav included) unmounted — a trap only a URL
+    edit could escape. *Fixed four layers deep:* the route param and date input
+    are sanitized (real calendar date, clamped to today), `logSet`/`copyLast…`
+    refuse malformed dates, `normalizeState` drops invalid-date workouts (their
+    sets are kept as orphans — no set data destroyed), and a route-level error
+    boundary keeps the nav alive with a "your data is safe" card if any page
+    ever crashes again.
+
+12. **Future-dated workouts** could be created by typing a date (the input's
+    `max` isn't enforced on manual entry) or via the route. *Fixed:* both paths
+    clamp to today.
+
+13. **"Import a day" produced colliding set orders after a middle-set delete**
+    — `mergeDayImport` used count instead of max(order)+1 (the reducer fix from
+    pass #1 hadn't been applied to this parallel path). *Fixed + tested.*
+
+14. **Settings bodyweight accepted negatives** until the next reload repaired
+    it. *Fixed:* clamped immediately (0–2000).
+
 ## Hardening (no observed failure, but fragile)
 
 - **Import validation was shallow.** Any `{machines: […]}` object entered the

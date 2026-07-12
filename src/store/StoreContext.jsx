@@ -328,6 +328,9 @@ export function StoreProvider({ children }) {
        * same rules as everywhere else: weight ≥ 0, reps ≥ 1.
        */
       logSet({ date, machineId, weight, reps }) {
+        // Defense in depth: a malformed date must never become a workout key
+        // (the UI sanitizes, but the route param is attacker-controllable).
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return
         const w = Number(weight)
         const r = Math.round(Number(reps))
         dispatch({
@@ -371,6 +374,7 @@ export function StoreProvider({ children }) {
        * Returns the number of sets copied.
        */
       copyLastWorkoutForMachine(machineId, date) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return 0
         const target = state.workouts.find((w) => w.date === date)
         const candidates = state.workouts
           .filter((w) => w.id !== target?.id)
@@ -402,7 +406,11 @@ export function StoreProvider({ children }) {
       },
 
       setBodyweight(value) {
-        dispatch({ type: 'SET_SETTING', key: 'bodyweight', value: Number(value) || 0 })
+        // Clamp immediately — a negative bodyweight would otherwise sit in
+        // storage until the next reload's normalization repaired it.
+        const n = Number(value)
+        const clamped = Number.isFinite(n) ? Math.min(Math.max(n, 0), 2000) : 0
+        dispatch({ type: 'SET_SETTING', key: 'bodyweight', value: clamped })
       },
 
       // Routines: ordered programs of { machineId, sets, repLow, repHigh }.
