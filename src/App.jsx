@@ -1,13 +1,17 @@
+import { lazy, Suspense } from 'react'
 import { useHashRoute, matchRoute } from './router.jsx'
 import { useStore } from './store/StoreContext.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import MachinesPage from './pages/MachinesPage.jsx'
-import MachineDetail from './pages/MachineDetail.jsx'
-import ProgressPage from './pages/ProgressPage.jsx'
 import LogWorkout from './pages/LogWorkout.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import RecordsPage from './pages/RecordsPage.jsx'
+
+// The two chart pages pull in Recharts (~180KB min) — lazy-load them so the
+// dashboard and the log-a-set path never pay for it.
+const ProgressPage = lazy(() => import('./pages/ProgressPage.jsx'))
+const MachineDetail = lazy(() => import('./pages/MachineDetail.jsx'))
 
 export default function App() {
   const path = useHashRoute()
@@ -44,7 +48,13 @@ export default function App() {
               </button>
             </div>
           )}
-          {renderRoute(path)}
+          <Suspense
+            fallback={
+              <div className="py-16 text-center text-slate-500 animate-pulse text-sm">Loading…</div>
+            }
+          >
+            {renderRoute(path)}
+          </Suspense>
         </div>
       </main>
       <BottomNav path={path} />
