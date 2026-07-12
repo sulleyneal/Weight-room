@@ -21,7 +21,8 @@ import PageHeader from '../components/PageHeader.jsx'
 import MachinePhoto from '../components/MachinePhoto.jsx'
 import MuscleChip from '../components/MuscleChip.jsx'
 import MachineForm from '../components/MachineForm.jsx'
-import { IconEdit, IconTrash, IconPlus, IconTrophy } from '../components/Icons.jsx'
+import ShareModal from '../components/ShareModal.jsx'
+import { IconEdit, IconTrash, IconPlus, IconTrophy, IconImage } from '../components/Icons.jsx'
 
 const METRICS = [
   { key: 'best1RM', label: 'Est. 1RM', color: '#f97316' },
@@ -32,6 +33,7 @@ const METRICS = [
 export default function MachineDetail({ id }) {
   const { state, deleteMachine } = useStore()
   const [editing, setEditing] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [metric, setMetric] = useState('best1RM')
   const unit = state.settings.unit
 
@@ -231,10 +233,22 @@ export default function MachineDetail({ id }) {
 
           {/* Set detail for latest session */}
           <LatestSetBreakdown sessions={sessions} unit={unit} />
+
+          <button className="btn-ghost w-full mt-4" onClick={() => setSharing(true)}>
+            <IconImage size={20} /> Share progress card
+          </button>
         </>
       )}
 
       <MachineForm open={editing} onClose={() => setEditing(false)} machine={machine} />
+      {sessions.length > 0 && (
+        <ShareModal
+          open={sharing}
+          onClose={() => setSharing(false)}
+          date={sessions[sessions.length - 1].date}
+          initialMachineId={machine.id}
+        />
+      )}
     </div>
   )
 }
