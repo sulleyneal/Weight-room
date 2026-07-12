@@ -2,12 +2,13 @@
 
 /**
  * Epley estimated one-rep max: weight × (1 + reps/30).
- * A single rep returns the weight unchanged.
+ * A single rep IS a one-rep max, so it returns the weight unchanged.
  */
 export function epley1RM(weight, reps) {
   const w = Number(weight) || 0
   const r = Number(reps) || 0
   if (w <= 0 || r <= 0) return 0
+  if (r === 1) return w
   return w * (1 + r / 30)
 }
 
@@ -260,15 +261,16 @@ export function trainingLoadSeries(machines, workouts, sets, group = 'All') {
     const v = vols[i]
     acute += aAlpha * (v - acute)
     chronic += cAlpha * (v - chronic)
-    const low = chronic * 0.8
-    const high = chronic * 1.3
+    // Round low/high first so the stacked band (low + span) lands exactly on high.
+    const low = Math.round(chronic * 0.8)
+    const high = Math.round(chronic * 1.3)
     return {
       date: d,
       label: fmtDateShort(d),
       acute: Math.round(acute),
-      low: Math.round(low),
-      high: Math.round(high),
-      span: Math.max(0, Math.round(high - low)),
+      low,
+      high,
+      span: Math.max(0, high - low),
       trained: v > 0, // a workout happened this day → show a dot
     }
   })
