@@ -140,6 +140,32 @@ export function reducer(state, action) {
       return { ...state, sets, workouts }
     }
 
+    // Put a just-deleted set back (undo). The day's workout may have been
+    // pruned by the delete, so find-or-create it by date; if the original
+    // order was reused in the meantime, append instead of colliding.
+    case 'RESTORE_SET': {
+      if (state.sets.some((s) => s.id === action.set.id)) return state
+      const existing = state.workouts.find((w) => w.date === action.date)
+      const workoutId = existing ? existing.id : action.newWorkoutId
+      const workouts = existing
+        ? state.workouts
+        : [...state.workouts, { id: workoutId, date: action.date }]
+      let order = action.set.order ?? 0
+      let maxOrder = -1
+      for (const s of state.sets) {
+        if (s.workoutId === workoutId && s.machineId === action.set.machineId) {
+          maxOrder = Math.max(maxOrder, s.order ?? 0)
+          if ((s.order ?? 0) === order) order = null // collision → append
+        }
+      }
+      if (order == null) order = maxOrder + 1
+      return {
+        ...state,
+        workouts,
+        sets: [...state.sets, { ...action.set, workoutId, order }],
+      }
+    }
+
     case 'DELETE_WORKOUT': {
       const sets = state.sets.filter((s) => s.workoutId !== action.id)
       const workouts = state.workouts.filter((w) => w.id !== action.id)
@@ -186,6 +212,8 @@ export function StoreProvider({ children }) {
   // User-facing data-safety notice: { tone: 'warn' | 'error', msg }.
   const [notice, setNotice] = useState(null)
   const saveFailedRef = useRef(false)
+  // Last deleted set, undoable for a few seconds: { set, date, key }.
+  const [undoable, setUndoable] = useState(null)
 
   // Raw document string as of hydration, to detect non-React writers that
   // slipped in before our first save (no storage event fires for
@@ -362,7 +390,26 @@ export function StoreProvider({ children }) {
       },
 
       deleteSet(id) {
+        // Keep the deleted set undoable — the delete button lives an inch from
+        // the edit buttons and gym thumbs are sweaty.
+        const set = state.sets.find((s) => s.id === id)
+        const workout = set && state.workouts.find((w) => w.id === set.workoutId)
         dispatch({ type: 'DELETE_SET', id })
+        if (set && workout) setUndoable({ set, date: workout.date, key: `${id}:${Date.now()}` })
+      },
+
+      undoDeleteSet(entry) {
+        dispatch({
+          type: 'RESTORE_SET',
+          set: entry.set,
+          date: entry.date,
+          newWorkoutId: uid('w'),
+        })
+        setUndoable(null)
+      },
+
+      clearUndoable() {
+        setUndoable(null)
       },
 
       deleteWorkout(id) {
@@ -744,8 +791,8 @@ export function StoreProvider({ children }) {
   }, [state])
 
   const value = useMemo(
-    () => ({ state, notice, dismissNotice: () => setNotice(null), ...actions }),
-    [state, notice, actions],
+    () => ({ state, notice, dismissNotice: () => setNotice(null), undoable, ...actions }),
+    [state, notice, undoable, actions],
   )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>

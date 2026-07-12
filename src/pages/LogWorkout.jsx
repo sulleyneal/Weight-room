@@ -317,6 +317,35 @@ export default function LogWorkout({ date: routeDate }) {
         excludeIds={sessionMachineIds}
         onPick={addMachineToSession}
       />
+
+      <UndoSnackbar />
+    </div>
+  )
+}
+
+/** "Set deleted — Undo" toast; auto-dismisses. Rescues fat-finger deletes. */
+function UndoSnackbar() {
+  const { undoable, undoDeleteSet, clearUndoable } = useStore()
+
+  useEffect(() => {
+    if (!undoable) return
+    const id = setTimeout(clearUndoable, 6000)
+    return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoable?.key])
+
+  if (!undoable) return null
+  return (
+    <div className="fixed bottom-24 inset-x-0 z-40 flex justify-center px-4 pointer-events-none">
+      <div className="pointer-events-auto card bg-ink-700 border-ink-600 shadow-xl px-4 py-1.5 flex items-center gap-2">
+        <span className="text-sm text-slate-300">Set deleted</span>
+        <button
+          className="text-brand-400 font-bold text-sm px-3 py-2.5"
+          onClick={() => undoDeleteSet(undoable)}
+        >
+          Undo
+        </button>
+      </div>
     </div>
   )
 }

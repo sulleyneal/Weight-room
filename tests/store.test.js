@@ -75,6 +75,68 @@ describe('reducer ADD_SETS_FOR_DATE', () => {
   })
 })
 
+describe('reducer RESTORE_SET (undo delete)', () => {
+  it('restores a deleted set with its original identity and order', () => {
+    let state = { ...emptyState(), loaded: true }
+    for (let i = 0; i < 3; i++) state = reducer(state, logSet(i))
+    const victim = state.sets[1]
+    state = reducer(state, { type: 'DELETE_SET', id: victim.id })
+    state = reducer(state, {
+      type: 'RESTORE_SET',
+      set: victim,
+      date: '2026-07-12',
+      newWorkoutId: 'w-new',
+    })
+    expect(state.sets.map((s) => s.id).sort()).toEqual(['s0', 's1', 's2'])
+    expect(state.sets.find((s) => s.id === victim.id).order).toBe(victim.order)
+    expect(state.workouts).toHaveLength(1)
+  })
+
+  it('recreates the pruned workout when undoing the day-s only set', () => {
+    let state = { ...emptyState(), loaded: true }
+    state = reducer(state, logSet(0))
+    const victim = state.sets[0]
+    state = reducer(state, { type: 'DELETE_SET', id: victim.id }) // workout pruned
+    expect(state.workouts).toHaveLength(0)
+    state = reducer(state, {
+      type: 'RESTORE_SET',
+      set: victim,
+      date: '2026-07-12',
+      newWorkoutId: 'w-new',
+    })
+    expect(state.workouts).toEqual([{ id: 'w-new', date: '2026-07-12' }])
+    expect(state.sets[0]).toMatchObject({ id: 's0', workoutId: 'w-new', order: 0 })
+  })
+
+  it('appends instead of colliding when the original order was reused', () => {
+    let state = { ...emptyState(), loaded: true }
+    for (let i = 0; i < 2; i++) state = reducer(state, logSet(i)) // orders 0,1
+    const victim = state.sets[1] // order 1
+    state = reducer(state, { type: 'DELETE_SET', id: victim.id })
+    state = reducer(state, logSet(5)) // takes order 1
+    state = reducer(state, {
+      type: 'RESTORE_SET',
+      set: victim,
+      date: '2026-07-12',
+      newWorkoutId: 'w-new',
+    })
+    const orders = state.sets.map((s) => s.order)
+    expect(new Set(orders).size).toBe(orders.length)
+    expect(state.sets.find((s) => s.id === victim.id).order).toBe(2)
+  })
+
+  it('is idempotent (double-undo cannot duplicate the set)', () => {
+    let state = { ...emptyState(), loaded: true }
+    state = reducer(state, logSet(0))
+    const victim = state.sets[0]
+    state = reducer(state, { type: 'DELETE_SET', id: victim.id })
+    const action = { type: 'RESTORE_SET', set: victim, date: '2026-07-12', newWorkoutId: 'w-new' }
+    state = reducer(state, action)
+    state = reducer(state, action)
+    expect(state.sets).toHaveLength(1)
+  })
+})
+
 describe('reducer DELETE_MACHINE', () => {
   it('removes the machine, its sets, empty workouts, and routine references', () => {
     let state = {
