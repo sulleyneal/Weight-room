@@ -323,16 +323,13 @@ export default function LogWorkout({ date: routeDate }) {
   )
 }
 
-/** "Set deleted — Undo" toast; auto-dismisses. Rescues fat-finger deletes. */
+/**
+ * "Set deleted — Undo" toast. Expiry is wall-clock and lives in the store
+ * provider, so navigating away can't pause the window and revive a stale
+ * undo minutes later.
+ */
 function UndoSnackbar() {
-  const { undoable, undoDeleteSet, clearUndoable } = useStore()
-
-  useEffect(() => {
-    if (!undoable) return
-    const id = setTimeout(clearUndoable, 6000)
-    return () => clearTimeout(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [undoable?.key])
+  const { undoable, undoDeleteSet } = useStore()
 
   if (!undoable) return null
   return (

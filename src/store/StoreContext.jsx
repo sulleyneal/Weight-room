@@ -145,6 +145,10 @@ export function reducer(state, action) {
     // order was reused in the meantime, append instead of colliding.
     case 'RESTORE_SET': {
       if (state.sets.some((s) => s.id === action.set.id)) return state
+      // The set's machine may have been deleted since ("removes the exercise
+      // and all its logged sets" must stay true) — a restore would create an
+      // invisible ghost set that inflates stats and can't be removed.
+      if (!state.machines.some((m) => m.id === action.set.machineId)) return state
       const existing = state.workouts.find((w) => w.date === action.date)
       const workoutId = existing ? existing.id : action.newWorkoutId
       const workouts = existing
@@ -213,7 +217,10 @@ export function StoreProvider({ children }) {
   const [notice, setNotice] = useState(null)
   const saveFailedRef = useRef(false)
   // Last deleted set, undoable for a few seconds: { set, date, key }.
+  // Expiry is wall-clock and owned HERE (not by the snackbar component) so
+  // navigating away can't pause the window and revive a stale undo later.
   const [undoable, setUndoable] = useState(null)
+  const undoTimerRef = useRef(null)
 
   // Raw document string as of hydration, to detect non-React writers that
   // slipped in before our first save (no storage event fires for
@@ -332,6 +339,8 @@ export function StoreProvider({ children }) {
       deleteMachine(id) {
         idb.deletePhoto(id).catch(() => {})
         dispatch({ type: 'DELETE_MACHINE', id })
+        // A pending set-undo for this machine must die with it.
+        setUndoable((u) => (u && u.set.machineId === id ? null : u))
       },
 
       // Photos
@@ -395,7 +404,11 @@ export function StoreProvider({ children }) {
         const set = state.sets.find((s) => s.id === id)
         const workout = set && state.workouts.find((w) => w.id === set.workoutId)
         dispatch({ type: 'DELETE_SET', id })
-        if (set && workout) setUndoable({ set, date: workout.date, key: `${id}:${Date.now()}` })
+        if (set && workout) {
+          setUndoable({ set, date: workout.date, key: `${id}:${Date.now()}` })
+          clearTimeout(undoTimerRef.current)
+          undoTimerRef.current = setTimeout(() => setUndoable(null), 6000)
+        }
       },
 
       undoDeleteSet(entry) {
@@ -405,10 +418,12 @@ export function StoreProvider({ children }) {
           date: entry.date,
           newWorkoutId: uid('w'),
         })
+        clearTimeout(undoTimerRef.current)
         setUndoable(null)
       },
 
       clearUndoable() {
+        clearTimeout(undoTimerRef.current)
         setUndoable(null)
       },
 
@@ -721,6 +736,7 @@ export function StoreProvider({ children }) {
         const { data, photos } = parseBackup(payload)
         await idb.replaceAllPhotos(photos)
         dispatch({ type: 'REPLACE_ALL', payload: data })
+        setUndoable(null) // a pre-import set must not be undoable into the new data
       },
 
       /**
@@ -740,6 +756,7 @@ export function StoreProvider({ children }) {
         await idb.replaceAllPhotos({})
         const fresh = { ...emptyState(), machines: seedMachines() }
         dispatch({ type: 'REPLACE_ALL', payload: fresh })
+        setUndoable(null)
       },
 
       /** Generate a few weeks of plausible sample sets across seeded machines. */
