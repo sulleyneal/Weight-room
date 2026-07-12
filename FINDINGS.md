@@ -151,6 +151,10 @@ recovers, offline works, no tap target under 32px, huge-state pages ~60ms).
   (weights are stored in the display unit; toggling reinterprets).
 - **Day-merge re-import duplicates sets by design** — the confirm dialog warns
   ("Imported sets will be ADDED to that day"). It is a merge tool, not a sync.
+- **"Import a day (merge)" keeps a pending set-undo alive** (unlike full import /
+  reset / machine delete, which invalidate it). Verified harmless by the final
+  attacker — the merge preserves the machine and day, so the undo stays
+  semantically coherent (zero ghosts, zero order collisions).
 - **Same-document non-React writes after startup** (devtools/extensions writing
   the key mid-session) are still last-write-wins: no storage event fires and
   true state merging is out of scope for a single-user app. Cross-tab operation
