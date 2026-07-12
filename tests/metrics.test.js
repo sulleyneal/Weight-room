@@ -5,6 +5,7 @@ import {
   sessionsForMachine,
   machineBests,
   prSessionsForMachine,
+  prCountByWorkout,
   suggestProgression,
   trainingLoadSeries,
   todayISO,
@@ -136,6 +137,31 @@ describe('prSessionsForMachine', () => {
         expect(actual.get(workoutId), `${m.name} ${workoutId}`).toEqual(flags)
       }
     }
+  })
+})
+
+describe('prCountByWorkout', () => {
+  it('matches the per-machine prSessionsForMachine loop exactly (real backup)', () => {
+    const { machines, workouts: rw, sets: rs } = realBackup.data
+    const expected = new Map()
+    for (const m of machines) {
+      for (const [workoutId, flags] of prSessionsForMachine(m.id, rw, rs)) {
+        if (flags.weightPR || flags.oneRmPR) {
+          expected.set(workoutId, (expected.get(workoutId) || 0) + 1)
+        }
+      }
+    }
+    const actual = prCountByWorkout(rw, rs)
+    expect(Object.fromEntries(actual)).toEqual(Object.fromEntries(expected))
+  })
+
+  it('ignores orphan sets and counts multiple machines PRing the same day', () => {
+    const counts = prCountByWorkout(workouts, sets)
+    // w1: machine M PRs and machine OTHER PRs (first session each) = 2
+    expect(counts.get('w1')).toBe(2)
+    expect(counts.get('w2')).toBe(1)
+    expect(counts.get('w3')).toBe(1)
+    expect(counts.get('w-gone')).toBeUndefined()
   })
 })
 

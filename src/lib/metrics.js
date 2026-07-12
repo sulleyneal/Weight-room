@@ -103,6 +103,53 @@ export function totalVolume(sets) {
   return sets.reduce((sum, s) => sum + setVolume(s), 0)
 }
 
+/**
+ * Count, per workout, how many machines set a PR (top-set weight or est. 1RM
+ * above everything before it) in that session. Semantically identical to
+ * running prSessionsForMachine for every machine, but a single pass over sets
+ * — O(sets) instead of O(machines × sets) — so the dashboard stays fast with
+ * years of history. Returns Map of workoutId -> count.
+ */
+export function prCountByWorkout(workouts, sets) {
+  const dateOf = new Map(workouts.map((w) => [w.id, w.date]))
+
+  // machineId -> workoutId -> { date, top, e1 } session aggregates.
+  const perMachine = new Map()
+  for (const s of sets) {
+    const date = dateOf.get(s.workoutId)
+    if (!date) continue
+    let sessions = perMachine.get(s.machineId)
+    if (!sessions) {
+      sessions = new Map()
+      perMachine.set(s.machineId, sessions)
+    }
+    let agg = sessions.get(s.workoutId)
+    if (!agg) {
+      agg = { date, top: 0, e1: 0 }
+      sessions.set(s.workoutId, agg)
+    }
+    const w = Number(s.weight) || 0
+    if (w > agg.top) agg.top = w
+    const e1 = epley1RM(s.weight, s.reps)
+    if (e1 > agg.e1) agg.e1 = e1
+  }
+
+  const counts = new Map()
+  for (const sessions of perMachine.values()) {
+    const ordered = [...sessions.entries()].sort((a, b) => a[1].date.localeCompare(b[1].date))
+    let bestTop = 0
+    let best1 = 0
+    for (const [workoutId, agg] of ordered) {
+      if (agg.top > bestTop + 1e-9 || agg.e1 > best1 + 1e-9) {
+        counts.set(workoutId, (counts.get(workoutId) || 0) + 1)
+      }
+      if (agg.top > bestTop) bestTop = agg.top
+      if (agg.e1 > best1) best1 = agg.e1
+    }
+  }
+  return counts
+}
+
 /** ISO week boundaries (Mon–Sun) for a given date. */
 export function startOfWeek(date = new Date()) {
   const d = new Date(date)
