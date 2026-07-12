@@ -3,9 +3,9 @@
 Live progress log for the adversarial audit & level-up pass. See FINDINGS.md
 (written at the end of the audit) for the full inventory of findings.
 
-**Current phase:** 1 — storage-layer hardening + test infrastructure
-**Last attacker verdict:** none yet (first attack pass runs after Phase 1)
-**Biggest open gap:** no tests exist; corrupt-localStorage path silently reseeds and overwrites user data
+**Current phase:** 2 — attack pass #1 (hostile attacker + house-rules checker running against the built app)
+**Last attacker verdict:** pending (pass #1 in progress)
+**Biggest open gap:** unverified by attackers — hardening and perf work landed but not yet independently attacked
 
 ## Plan of record
 
@@ -27,3 +27,10 @@ Live progress log for the adversarial audit & level-up pass. See FINDINGS.md
 - 2026-07-12: Full codebase read complete (every file). Real backup (13 machines / 8
   workouts / 140 sets / 2 routines / 12 photos) inspected and stashed as the round-trip
   fixture. Risk list ranked; plan posted.
+- 2026-07-12: Phase 1 landed in 6 commits — storage layer extracted to pure functions and
+  hardened (corrupt-data recovery stash + warning, save-failure banner, cross-tab storage
+  adoption, deep normalization incl. duplicate-date workout merge), stat-math fixes
+  (single-rep e1RM, band rounding), 0-rep entry guard, 52-test vitest suite (`npm test`),
+  chart pages code-split (main bundle 669KB → 256KB), dashboard PR counting single-pass.
+  Lighthouse mobile perf on the dashboard with a 5-year/15k-set dataset: **99** (was 87;
+  TBT 490ms → 110ms). Attack pass #1 dispatched.
