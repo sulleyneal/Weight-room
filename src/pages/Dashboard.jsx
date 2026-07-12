@@ -1,12 +1,6 @@
 import { useMemo } from 'react'
 import { useStore } from '../store/StoreContext.jsx'
-import {
-  startOfWeek,
-  prSessionsForMachine,
-  setVolume,
-  fmtDate,
-  todayISO,
-} from '../lib/metrics.js'
+import { startOfWeek, prCountByWorkout, setVolume, fmtDate, todayISO } from '../lib/metrics.js'
 import { fmtNumber, unitLabel } from '../lib/units.js'
 import { MUSCLE_GROUPS, MUSCLE_COLORS } from '../data/seed.js'
 import { navigate } from '../router.jsx'
@@ -41,19 +35,11 @@ export default function Dashboard() {
       .sort((a, b) => b.date.localeCompare(a.date))
   }, [state.workouts, state.sets])
 
-  // ---- PRs per machine (workoutId -> flags) ----
-  const prByWorkout = useMemo(() => {
-    const map = new Map() // workoutId -> count of machines that PR'd
-    for (const m of state.machines) {
-      const prs = prSessionsForMachine(m.id, state.workouts, state.sets)
-      for (const [workoutId, flags] of prs) {
-        if (flags.weightPR || flags.oneRmPR) {
-          map.set(workoutId, (map.get(workoutId) || 0) + 1)
-        }
-      }
-    }
-    return map
-  }, [state.machines, state.workouts, state.sets])
+  // ---- PRs per workout (workoutId -> count of machines that PR'd) ----
+  const prByWorkout = useMemo(
+    () => prCountByWorkout(state.workouts, state.sets),
+    [state.workouts, state.sets],
+  )
 
   // ---- This-week stats ----
   const weekStart = useMemo(() => startOfWeek(), [])

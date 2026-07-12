@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store/StoreContext.jsx'
 import {
   todayISO,
+  addDaysISO,
   fmtDate,
   fmtDateShort,
   epley1RM,
@@ -36,12 +37,23 @@ import ImportPlanModal from '../components/ImportPlanModal.jsx'
 import AskClaudeButton from '../components/AskClaudeButton.jsx'
 import { useWakeLock } from '../hooks/useWakeLock.js'
 
+// Only real, non-future ISO dates may become a workout key: the route param
+// and the date input are both attacker-controllable ("#/log/banana",
+// typed "2030-01-01") and a bad date poisons every page that parses it.
+function sanitizeDate(d) {
+  const today = todayISO()
+  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(new Date(d).getTime())) {
+    return today
+  }
+  return d > today ? today : d
+}
+
 export default function LogWorkout({ date: routeDate }) {
   const store = useStore()
   const { state } = store
   const unit = state.settings.unit
 
-  const [date, setDate] = useState(routeDate || todayISO())
+  const [date, setDate] = useState(() => sanitizeDate(routeDate))
   const [pickerOpen, setPickerOpen] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [routinesOpen, setRoutinesOpen] = useState(false)
@@ -55,7 +67,7 @@ export default function LogWorkout({ date: routeDate }) {
   const pendingPreloadRef = useRef(null)
 
   useEffect(() => {
-    if (routeDate) setDate(routeDate)
+    if (routeDate) setDate(sanitizeDate(routeDate))
   }, [routeDate])
 
   // Reset session-scoped state when the date changes — unless a preload is pending.
@@ -118,10 +130,9 @@ export default function LogWorkout({ date: routeDate }) {
   }, [sessionMachineIds, templateOrder])
 
   function shiftDate(days) {
-    const [y, m, d] = date.split('-').map(Number)
-    const dt = new Date(y, m - 1, d)
-    dt.setDate(dt.getDate() + days)
-    setDate(dt.toISOString().slice(0, 10))
+    // addDaysISO is timezone-safe; naive toISOString() lands on the previous
+    // calendar day for every UTC-positive timezone.
+    setDate(addDaysISO(date, days))
   }
 
   function addMachineToSession(machineId) {
@@ -210,7 +221,7 @@ export default function LogWorkout({ date: routeDate }) {
             type="date"
             value={date}
             max={todayISO()}
-            onChange={(e) => setDate(e.target.value || todayISO())}
+            onChange={(e) => setDate(sanitizeDate(e.target.value))}
             className="input pl-10 text-center"
           />
         </label>
@@ -306,6 +317,32 @@ export default function LogWorkout({ date: routeDate }) {
         excludeIds={sessionMachineIds}
         onPick={addMachineToSession}
       />
+
+      <UndoSnackbar />
+    </div>
+  )
+}
+
+/**
+ * "Set deleted — Undo" toast. Expiry is wall-clock and lives in the store
+ * provider, so navigating away can't pause the window and revive a stale
+ * undo minutes later.
+ */
+function UndoSnackbar() {
+  const { undoable, undoDeleteSet } = useStore()
+
+  if (!undoable) return null
+  return (
+    <div className="fixed bottom-24 inset-x-0 z-40 flex justify-center px-4 pointer-events-none">
+      <div className="pointer-events-auto card bg-ink-700 border-ink-600 shadow-xl px-4 py-1.5 flex items-center gap-2">
+        <span className="text-sm text-slate-300">Set deleted</span>
+        <button
+          className="text-brand-400 font-bold text-sm px-3 py-2.5"
+          onClick={() => undoDeleteSet(undoable)}
+        >
+          Undo
+        </button>
+      </div>
     </div>
   )
 }
@@ -378,25 +415,27 @@ function MachineBlock({ machine, date, unit, store, target }) {
     setRestToken((t) => t + 1)
   }
 
+  // A 0-rep set is always a mis-tap (cleared field / stepper at 0) — block it
+  // rather than pollute history and PR math with phantom sets.
+  const repsValid = (Number(reps) || 0) > 0
+
   function addSet() {
-    const workoutId = store.ensureWorkout(date)
-    store.addSet({ workoutId, machineId: machine.id, weight, reps })
+    if (!repsValid) return
+    store.logSet({ date, machineId: machine.id, weight, reps })
     afterSetLogged()
   }
 
   function repeatLastSet() {
     const ref = lastTodaySet || lastEverSet
     if (!ref) return addSet()
-    const workoutId = store.ensureWorkout(date)
-    store.addSet({ workoutId, machineId: machine.id, weight: ref.weight, reps: ref.reps })
+    store.logSet({ date, machineId: machine.id, weight: ref.weight, reps: ref.reps })
     setWeight(ref.weight)
     setReps(ref.reps)
     afterSetLogged()
   }
 
   function copyLastWorkout() {
-    const workoutId = store.ensureWorkout(date)
-    const n = store.copyLastWorkoutForMachine(machine.id, workoutId)
+    const n = store.copyLastWorkoutForMachine(machine.id, date)
     if (n === 0) alert('No previous session found for this exercise.')
   }
 
@@ -479,7 +518,7 @@ function MachineBlock({ machine, date, unit, store, target }) {
               <span className="text-xs text-slate-400">Last · {fmtDateShort(prevSession.date)}</span>
               {suggestion && (
                 <button
-                  className={`text-xs font-bold ${
+                  className={`text-xs font-bold py-3 px-2 -my-3 -mx-2 ${
                     suggestion.mode === 'increase'
                       ? 'text-green-400'
                       : suggestion.mode === 'deload'
@@ -515,7 +554,7 @@ function MachineBlock({ machine, date, unit, store, target }) {
           />
           <NumberStepper label="Reps" value={reps} onChange={setReps} step={1} min={0} />
         </div>
-        <button className="btn-primary w-full" onClick={addSet}>
+        <button className="btn-primary w-full" onClick={addSet} disabled={!repsValid}>
           <IconPlus size={20} /> Add set
         </button>
         <div className="grid grid-cols-2 gap-2">
@@ -549,6 +588,9 @@ function SetRow({ index, set, unit, store }) {
   const [r, setR] = useState(set.reps)
 
   if (editing) {
+    // Edits obey the same rules as entry: reps must be a positive number
+    // before the save button enables (a 0-rep set should be deleted, not saved).
+    const editValid = Math.round(Number(r)) >= 1 && Number(w) >= 0
     return (
       <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem] gap-2 items-center">
         <span className="text-slate-500 font-semibold text-center">{index}</span>
@@ -567,7 +609,8 @@ function SetRow({ index, set, unit, store }) {
           onChange={(e) => setR(e.target.value)}
         />
         <button
-          className="btn-primary p-0 w-9 h-9 text-xs"
+          className="btn-primary p-0 w-10 h-10 text-xs"
+          disabled={!editValid}
           onClick={() => {
             store.updateSet(set.id, { weight: w, reps: r })
             setEditing(false)
@@ -580,17 +623,26 @@ function SetRow({ index, set, unit, store }) {
     )
   }
 
+  // Sweaty-thumb rule: every control in this row keeps a ≥40px hit area, and
+  // delete lives in its own fixed-width column so it can't be grazed while
+  // tapping the numbers.
   return (
-    <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem] gap-2 items-center bg-ink-700/40 rounded-lg py-1.5">
+    <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem] gap-2 items-center bg-ink-700/40 rounded-lg">
       <span className="text-slate-500 font-semibold text-center">{index}</span>
-      <button className="text-left font-semibold tabular-nums pl-1" onClick={() => setEditing(true)}>
+      <button
+        className="text-left font-semibold tabular-nums pl-1 py-3"
+        onClick={() => setEditing(true)}
+      >
         {fmtWeight(set.weight, unit)}
       </button>
-      <button className="text-left font-semibold tabular-nums pl-1" onClick={() => setEditing(true)}>
+      <button
+        className="text-left font-semibold tabular-nums pl-1 py-3"
+        onClick={() => setEditing(true)}
+      >
         {set.reps} reps
       </button>
       <button
-        className="text-slate-500 hover:text-red-400 flex justify-center"
+        className="text-slate-500 hover:text-red-400 flex items-center justify-center w-10 h-10 mx-auto"
         onClick={() => store.deleteSet(set.id)}
         aria-label="Delete set"
       >

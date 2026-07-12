@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useStore } from '../store/StoreContext.jsx'
+import { todayISO } from '../lib/metrics.js'
 import { unitLabel } from '../lib/units.js'
 import { downloadJSON } from '../lib/download.js'
 import PageHeader from '../components/PageHeader.jsx'
@@ -30,7 +31,7 @@ export default function SettingsPage() {
   async function handleExport() {
     try {
       const payload = await exportData()
-      downloadJSON(`weight-room-backup-${new Date().toISOString().slice(0, 10)}.json`, payload)
+      downloadJSON(`weight-room-backup-${todayISO()}.json`, payload)
       setStatus({ ok: true, msg: 'Backup downloaded.' })
     } catch (err) {
       setStatus({ ok: false, msg: `Export failed: ${err.message}` })

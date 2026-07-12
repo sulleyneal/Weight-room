@@ -2,12 +2,13 @@
 
 /**
  * Epley estimated one-rep max: weight × (1 + reps/30).
- * A single rep returns the weight unchanged.
+ * A single rep IS a one-rep max, so it returns the weight unchanged.
  */
 export function epley1RM(weight, reps) {
   const w = Number(weight) || 0
   const r = Number(reps) || 0
   if (w <= 0 || r <= 0) return 0
+  if (r === 1) return w
   return w * (1 + r / 30)
 }
 
@@ -100,6 +101,53 @@ export function prSessionsForMachine(machineId, workouts, sets) {
 /** Total volume across every set in the data set (optionally filtered). */
 export function totalVolume(sets) {
   return sets.reduce((sum, s) => sum + setVolume(s), 0)
+}
+
+/**
+ * Count, per workout, how many machines set a PR (top-set weight or est. 1RM
+ * above everything before it) in that session. Semantically identical to
+ * running prSessionsForMachine for every machine, but a single pass over sets
+ * — O(sets) instead of O(machines × sets) — so the dashboard stays fast with
+ * years of history. Returns Map of workoutId -> count.
+ */
+export function prCountByWorkout(workouts, sets) {
+  const dateOf = new Map(workouts.map((w) => [w.id, w.date]))
+
+  // machineId -> workoutId -> { date, top, e1 } session aggregates.
+  const perMachine = new Map()
+  for (const s of sets) {
+    const date = dateOf.get(s.workoutId)
+    if (!date) continue
+    let sessions = perMachine.get(s.machineId)
+    if (!sessions) {
+      sessions = new Map()
+      perMachine.set(s.machineId, sessions)
+    }
+    let agg = sessions.get(s.workoutId)
+    if (!agg) {
+      agg = { date, top: 0, e1: 0 }
+      sessions.set(s.workoutId, agg)
+    }
+    const w = Number(s.weight) || 0
+    if (w > agg.top) agg.top = w
+    const e1 = epley1RM(s.weight, s.reps)
+    if (e1 > agg.e1) agg.e1 = e1
+  }
+
+  const counts = new Map()
+  for (const sessions of perMachine.values()) {
+    const ordered = [...sessions.entries()].sort((a, b) => a[1].date.localeCompare(b[1].date))
+    let bestTop = 0
+    let best1 = 0
+    for (const [workoutId, agg] of ordered) {
+      if (agg.top > bestTop + 1e-9 || agg.e1 > best1 + 1e-9) {
+        counts.set(workoutId, (counts.get(workoutId) || 0) + 1)
+      }
+      if (agg.top > bestTop) bestTop = agg.top
+      if (agg.e1 > best1) best1 = agg.e1
+    }
+  }
+  return counts
 }
 
 /** ISO week boundaries (Mon–Sun) for a given date. */
@@ -260,15 +308,16 @@ export function trainingLoadSeries(machines, workouts, sets, group = 'All') {
     const v = vols[i]
     acute += aAlpha * (v - acute)
     chronic += cAlpha * (v - chronic)
-    const low = chronic * 0.8
-    const high = chronic * 1.3
+    // Round low/high first so the stacked band (low + span) lands exactly on high.
+    const low = Math.round(chronic * 0.8)
+    const high = Math.round(chronic * 1.3)
     return {
       date: d,
       label: fmtDateShort(d),
       acute: Math.round(acute),
-      low: Math.round(low),
-      high: Math.round(high),
-      span: Math.max(0, Math.round(high - low)),
+      low,
+      high,
+      span: Math.max(0, high - low),
       trained: v > 0, // a workout happened this day → show a dot
     }
   })

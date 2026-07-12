@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
+import {
+  subscribe,
+  getRemaining,
+  startRest,
+  stopRest,
+  preferredSecs,
+  setPreferredSecs,
+} from '../lib/restTimer.js'
 import { IconClose } from './Icons.jsx'
 
 const PRESETS = [
@@ -8,29 +16,6 @@ const PRESETS = [
   { s: 180, label: '3:00' },
 ]
 
-// Short beep via the Web Audio API (no asset needed).
-function beep() {
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext
-    if (!Ctx) return
-    const ctx = new Ctx()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.type = 'sine'
-    osc.frequency.value = 880
-    gain.gain.setValueAtTime(0.001, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.02)
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
-    osc.start()
-    osc.stop(ctx.currentTime + 0.55)
-    osc.onended = () => ctx.close()
-  } catch {
-    /* ignore */
-  }
-}
-
 function fmt(s) {
   const m = Math.floor(s / 60)
   const sec = s % 60
@@ -38,69 +23,36 @@ function fmt(s) {
 }
 
 /**
- * Rest timer. Renders a row of preset buttons; tapping one starts a countdown
- * that buzzes/vibrates at zero. Works off a target timestamp so it stays
- * accurate even if the tab is backgrounded.
+ * Rest timer UI over the shared engine in lib/restTimer.js. There is ONE
+ * countdown app-wide: it keeps running (and stays visible on every exercise
+ * card) while you scroll, navigate, or refresh mid-workout. Tapping a preset
+ * starts it and becomes the auto-start duration for future sets.
  */
-const PREF_KEY = 'weight-room:rest-secs'
-
-function preferredSecs() {
-  const v = Number(localStorage.getItem(PREF_KEY))
-  return v >= 15 && v <= 600 ? v : 90
-}
-
 export default function RestTimer({ autoStartToken = 0 }) {
-  const [target, setTarget] = useState(null) // epoch ms when rest ends
-  const [remaining, setRemaining] = useState(0)
-  const firedRef = useRef(false)
+  const remaining = useSyncExternalStore(subscribe, getRemaining)
 
   // Auto-start with the last-used duration whenever a set is logged.
   const tokenRef = useRef(autoStartToken)
   useEffect(() => {
     if (autoStartToken !== tokenRef.current) {
       tokenRef.current = autoStartToken
-      start(preferredSecs())
+      startRest(preferredSecs())
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStartToken])
 
-  useEffect(() => {
-    if (!target) return
-    firedRef.current = false
-    const tick = () => {
-      const left = Math.max(0, Math.round((target - Date.now()) / 1000))
-      setRemaining(left)
-      if (left <= 0 && !firedRef.current) {
-        firedRef.current = true
-        beep()
-        if (navigator.vibrate) navigator.vibrate([200, 100, 200])
-        setTarget(null)
-      }
-    }
-    tick()
-    const id = setInterval(tick, 250)
-    return () => clearInterval(id)
-  }, [target])
-
-  function start(seconds) {
-    setRemaining(seconds)
-    setTarget(Date.now() + seconds * 1000)
-  }
-
-  if (target) {
-    const left = remaining
+  if (remaining != null) {
     return (
       <div className="flex items-center gap-2">
         <button
           className="btn-ghost flex-1 tabular-nums text-lg font-bold py-2"
-          onClick={() => start(left + 30)}
+          onClick={() => startRest(remaining + 30)}
           aria-label="Add 30 seconds"
         >
-          {fmt(left)} <span className="text-xs text-slate-400 ml-1">+30s</span>
+          {fmt(remaining)} <span className="text-xs text-slate-400 ml-1">+30s</span>
         </button>
         <button
           className="btn-ghost w-11 h-11 p-0"
-          onClick={() => setTarget(null)}
+          onClick={stopRest}
           aria-label="Stop rest timer"
         >
           <IconClose size={20} />
@@ -117,10 +69,10 @@ export default function RestTimer({ autoStartToken = 0 }) {
       {PRESETS.map((p) => (
         <button
           key={p.s}
-          className="btn-ghost flex-1 py-2 text-sm tabular-nums"
+          className="btn-ghost flex-1 py-2.5 text-sm tabular-nums"
           onClick={() => {
-            localStorage.setItem(PREF_KEY, String(p.s)) // becomes the auto-start duration
-            start(p.s)
+            setPreferredSecs(p.s) // becomes the auto-start duration
+            startRest(p.s)
           }}
         >
           {p.label}
