@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store/StoreContext.jsx'
 import {
   todayISO,
+  addDaysISO,
   fmtDate,
   fmtDateShort,
   epley1RM,
@@ -118,10 +119,9 @@ export default function LogWorkout({ date: routeDate }) {
   }, [sessionMachineIds, templateOrder])
 
   function shiftDate(days) {
-    const [y, m, d] = date.split('-').map(Number)
-    const dt = new Date(y, m - 1, d)
-    dt.setDate(dt.getDate() + days)
-    setDate(dt.toISOString().slice(0, 10))
+    // addDaysISO is timezone-safe; naive toISOString() lands on the previous
+    // calendar day for every UTC-positive timezone.
+    setDate(addDaysISO(date, days))
   }
 
   function addMachineToSession(machineId) {
@@ -384,24 +384,21 @@ function MachineBlock({ machine, date, unit, store, target }) {
 
   function addSet() {
     if (!repsValid) return
-    const workoutId = store.ensureWorkout(date)
-    store.addSet({ workoutId, machineId: machine.id, weight, reps })
+    store.logSet({ date, machineId: machine.id, weight, reps })
     afterSetLogged()
   }
 
   function repeatLastSet() {
     const ref = lastTodaySet || lastEverSet
     if (!ref) return addSet()
-    const workoutId = store.ensureWorkout(date)
-    store.addSet({ workoutId, machineId: machine.id, weight: ref.weight, reps: ref.reps })
+    store.logSet({ date, machineId: machine.id, weight: ref.weight, reps: ref.reps })
     setWeight(ref.weight)
     setReps(ref.reps)
     afterSetLogged()
   }
 
   function copyLastWorkout() {
-    const workoutId = store.ensureWorkout(date)
-    const n = store.copyLastWorkoutForMachine(machine.id, workoutId)
+    const n = store.copyLastWorkoutForMachine(machine.id, date)
     if (n === 0) alert('No previous session found for this exercise.')
   }
 
@@ -484,7 +481,7 @@ function MachineBlock({ machine, date, unit, store, target }) {
               <span className="text-xs text-slate-400">Last · {fmtDateShort(prevSession.date)}</span>
               {suggestion && (
                 <button
-                  className={`text-xs font-bold ${
+                  className={`text-xs font-bold py-3 px-2 -my-3 -mx-2 ${
                     suggestion.mode === 'increase'
                       ? 'text-green-400'
                       : suggestion.mode === 'deload'
@@ -554,6 +551,9 @@ function SetRow({ index, set, unit, store }) {
   const [r, setR] = useState(set.reps)
 
   if (editing) {
+    // Edits obey the same rules as entry: reps must be a positive number
+    // before the save button enables (a 0-rep set should be deleted, not saved).
+    const editValid = Math.round(Number(r)) >= 1 && Number(w) >= 0
     return (
       <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem] gap-2 items-center">
         <span className="text-slate-500 font-semibold text-center">{index}</span>
@@ -572,7 +572,8 @@ function SetRow({ index, set, unit, store }) {
           onChange={(e) => setR(e.target.value)}
         />
         <button
-          className="btn-primary p-0 w-9 h-9 text-xs"
+          className="btn-primary p-0 w-10 h-10 text-xs"
+          disabled={!editValid}
           onClick={() => {
             store.updateSet(set.id, { weight: w, reps: r })
             setEditing(false)
@@ -585,17 +586,26 @@ function SetRow({ index, set, unit, store }) {
     )
   }
 
+  // Sweaty-thumb rule: every control in this row keeps a ≥40px hit area, and
+  // delete lives in its own fixed-width column so it can't be grazed while
+  // tapping the numbers.
   return (
-    <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem] gap-2 items-center bg-ink-700/40 rounded-lg py-1.5">
+    <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem] gap-2 items-center bg-ink-700/40 rounded-lg">
       <span className="text-slate-500 font-semibold text-center">{index}</span>
-      <button className="text-left font-semibold tabular-nums pl-1" onClick={() => setEditing(true)}>
+      <button
+        className="text-left font-semibold tabular-nums pl-1 py-3"
+        onClick={() => setEditing(true)}
+      >
         {fmtWeight(set.weight, unit)}
       </button>
-      <button className="text-left font-semibold tabular-nums pl-1" onClick={() => setEditing(true)}>
+      <button
+        className="text-left font-semibold tabular-nums pl-1 py-3"
+        onClick={() => setEditing(true)}
+      >
         {set.reps} reps
       </button>
       <button
-        className="text-slate-500 hover:text-red-400 flex justify-center"
+        className="text-slate-500 hover:text-red-400 flex items-center justify-center w-10 h-10 mx-auto"
         onClick={() => store.deleteSet(set.id)}
         aria-label="Delete set"
       >

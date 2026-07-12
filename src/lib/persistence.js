@@ -202,6 +202,15 @@ export function takeStartupWarning() {
   }
 }
 
+/** Raw main document string as currently stored (or null). */
+export function readRawDocument() {
+  try {
+    return localStorage.getItem(STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
 export function loadState() {
   let raw = null
   try {
@@ -217,12 +226,15 @@ export function loadState() {
     return normalizeState(parsed)
   } catch (err) {
     // NEVER silently reseed over data that exists but won't parse: stash the
-    // raw blob for manual recovery and queue a visible warning.
+    // raw blob for manual recovery and queue a visible warning. The newest
+    // corrupt blob is the most valuable; keep one previous generation too.
     console.error('Failed to parse saved data:', err)
     try {
-      if (!localStorage.getItem(RECOVERY_KEY)) {
-        localStorage.setItem(RECOVERY_KEY, raw)
+      const prior = localStorage.getItem(RECOVERY_KEY)
+      if (prior != null && prior !== raw) {
+        localStorage.setItem(`${RECOVERY_KEY}-prev`, prior)
       }
+      localStorage.setItem(RECOVERY_KEY, raw)
       queueStartupWarning(
         'Your saved data could not be read and a fresh library was loaded. ' +
           'The unreadable data was kept for recovery — export it from Settings → Data before logging anything important.',
@@ -267,6 +279,7 @@ export function getRecoveryStash() {
 export function clearRecoveryStash() {
   try {
     localStorage.removeItem(RECOVERY_KEY)
+    localStorage.removeItem(`${RECOVERY_KEY}-prev`)
   } catch {
     /* ignore */
   }

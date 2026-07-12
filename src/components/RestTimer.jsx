@@ -117,7 +117,7 @@ export default function RestTimer({ autoStartToken = 0 }) {
       {PRESETS.map((p) => (
         <button
           key={p.s}
-          className="btn-ghost flex-1 py-2 text-sm tabular-nums"
+          className="btn-ghost flex-1 py-2.5 text-sm tabular-nums"
           onClick={() => {
             localStorage.setItem(PREF_KEY, String(p.s)) // becomes the auto-start duration
             start(p.s)

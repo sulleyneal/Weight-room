@@ -2,7 +2,7 @@ import { IconPlus, IconMinus } from './Icons.jsx'
 
 /**
  * Large-tap-target number stepper for fast set entry.
- * Minus / editable value / plus. Holds long-press auto-repeat via pointer.
+ * Minus / editable value / plus.
  */
 export default function NumberStepper({
   value,

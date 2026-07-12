@@ -125,12 +125,14 @@ describe('loadState / saveState', () => {
     expect(warning).toMatch(/could not be read/i)
     // warning is one-shot
     expect(takeStartupWarning()).toBeNull()
-    // an existing stash is never overwritten by a second failure
-    localStorage.setItem(STORAGE_KEY, 'also-bad')
+    // a second failure keeps the newest blob AND one previous generation
+    localStorage.setItem(STORAGE_KEY, 'newer-corrupt-blob')
     loadState()
-    expect(getRecoveryStash()).toContain('truncated-by-quota')
+    expect(getRecoveryStash()).toContain('newer-corrupt-blob')
+    expect(localStorage.getItem('weight-room:v1:recovered-prev')).toContain('truncated-by-quota')
     clearRecoveryStash()
     expect(getRecoveryStash()).toBeNull()
+    expect(localStorage.getItem('weight-room:v1:recovered-prev')).toBeNull()
   })
 
   it('normalizes legacy/dirty stored data on load', () => {

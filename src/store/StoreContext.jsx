@@ -17,19 +17,23 @@ import {
   normalizeState,
   normalizeRoutine,
   takeStartupWarning,
+  readRawDocument,
   STORAGE_KEY,
   SCHEMA_VERSION,
 } from '../lib/persistence.js'
 import { isSyncEnabled, pushBackup } from '../lib/gistSync.js'
 import { seedMachines, COMMON_EXERCISES, STARTER_PROGRAMS, PROGRAM_MACHINES } from '../data/seed.js'
 import { uid } from '../lib/id.js'
-import { todayISO, epley1RM, setVolume, prSessionsForMachine } from '../lib/metrics.js'
+import { todayISO, addDaysISO, epley1RM, setVolume, prSessionsForMachine } from '../lib/metrics.js'
 import { computeIntensities } from '../lib/bodyMap.js'
 import * as idb from '../lib/idb.js'
 
 // ---- Reducer -------------------------------------------------------------
 
-function reducer(state, action) {
+// Exported for tests only — the invariants it enforces (one workout per date,
+// monotonically increasing set order, even for batched dispatches) are load-
+// bearing and covered in tests/store.test.js.
+export function reducer(state, action) {
   switch (action.type) {
     case 'HYDRATE':
       return { ...action.payload, loaded: true }
@@ -71,14 +75,56 @@ function reducer(state, action) {
       }
     }
 
-    case 'ADD_WORKOUT':
-      return { ...state, workouts: [...state.workouts, action.workout] }
+    // Find-or-create the day's workout and compute the set's order INSIDE the
+    // reducer: actions dispatched in the same task (rapid taps, synthetic
+    // bursts) each see the latest state, so duplicate-date workouts and
+    // clashing orders cannot be written. `date` is the workout key.
+    case 'LOG_SET': {
+      const existing = state.workouts.find((w) => w.date === action.date)
+      const workoutId = existing ? existing.id : action.newWorkoutId
+      const workouts = existing
+        ? state.workouts
+        : [...state.workouts, { id: workoutId, date: action.date }]
+      let order = 0
+      for (const s of state.sets) {
+        if (s.workoutId === workoutId && s.machineId === action.machineId) {
+          order = Math.max(order, (s.order ?? 0) + 1)
+        }
+      }
+      const set = {
+        id: action.setId,
+        workoutId,
+        machineId: action.machineId,
+        weight: action.weight,
+        reps: action.reps,
+        order,
+        t: action.t,
+      }
+      return { ...state, workouts, sets: [...state.sets, set] }
+    }
 
-    case 'ADD_SET':
-      return { ...state, sets: [...state.sets, action.set] }
-
-    case 'ADD_SETS':
-      return { ...state, sets: [...state.sets, ...action.sets] }
+    // Same find-or-create semantics for a batch of sets on one machine
+    // (used by "Copy last workout").
+    case 'ADD_SETS_FOR_DATE': {
+      const existing = state.workouts.find((w) => w.date === action.date)
+      const workoutId = existing ? existing.id : action.newWorkoutId
+      const workouts = existing
+        ? state.workouts
+        : [...state.workouts, { id: workoutId, date: action.date }]
+      let order = 0
+      for (const s of state.sets) {
+        if (s.workoutId === workoutId && s.machineId === action.machineId) {
+          order = Math.max(order, (s.order ?? 0) + 1)
+        }
+      }
+      const sets = action.sets.map((s, i) => ({
+        ...s,
+        workoutId,
+        machineId: action.machineId,
+        order: order + i,
+      }))
+      return { ...state, workouts, sets: [...state.sets, ...sets] }
+    }
 
     case 'UPDATE_SET':
       return {
@@ -141,10 +187,17 @@ export function StoreProvider({ children }) {
   const [notice, setNotice] = useState(null)
   const saveFailedRef = useRef(false)
 
+  // Raw document string as of hydration, to detect non-React writers that
+  // slipped in before our first save (no storage event fires for
+  // same-document writes).
+  const rawAtHydrateRef = useRef(null)
+  const firstSaveCheckedRef = useRef(false)
+
   // Hydrate once on mount: load saved data, or seed a fresh library.
   useEffect(() => {
     if (didHydrate.current) return
     didHydrate.current = true
+    rawAtHydrateRef.current = readRawDocument()
     const saved = loadState()
     if (saved) {
       dispatch({ type: 'HYDRATE', payload: saved })
@@ -160,6 +213,21 @@ export function StoreProvider({ children }) {
   // full, private mode…) must never be silent — the user is still logging.
   useEffect(() => {
     if (!state.loaded) return
+    // Before the very first save, re-check storage: if someone else wrote
+    // between our load and now, adopt their document instead of blindly
+    // overwriting it with what we hydrated.
+    if (!firstSaveCheckedRef.current) {
+      firstSaveCheckedRef.current = true
+      const current = readRawDocument()
+      if (current != null && current !== rawAtHydrateRef.current) {
+        try {
+          dispatch({ type: 'HYDRATE', payload: normalizeState(JSON.parse(current)) })
+          return // the adopted state re-triggers this effect and saves then
+        } catch {
+          /* unreadable external write — proceed with our own state */
+        }
+      }
+    }
     const ok = saveState(state)
     if (!ok && !saveFailedRef.current) {
       saveFailedRef.current = true
@@ -254,36 +322,39 @@ export function StoreProvider({ children }) {
       },
 
       // Workouts & sets
-      /** Find an existing workout for a date or create one; returns its id. */
-      ensureWorkout(date) {
-        const existing = state.workouts.find((w) => w.date === date)
-        if (existing) return existing.id
-        const workout = { id: uid('w'), date }
-        dispatch({ type: 'ADD_WORKOUT', workout })
-        return workout.id
-      },
-
-      addSet({ workoutId, machineId, weight, reps }) {
-        const order =
-          state.sets.filter((s) => s.workoutId === workoutId && s.machineId === machineId)
-            .length
-        const set = {
-          id: uid('s'),
-          workoutId,
+      /**
+       * Log one set on a date. The workout is found-or-created and the order
+       * assigned inside the reducer (race-free). Values are clamped to the
+       * same rules as everywhere else: weight ≥ 0, reps ≥ 1.
+       */
+      logSet({ date, machineId, weight, reps }) {
+        const w = Number(weight)
+        const r = Math.round(Number(reps))
+        dispatch({
+          type: 'LOG_SET',
+          date,
           machineId,
-          weight: Number(weight) || 0,
-          reps: Number(reps) || 0,
-          order,
+          weight: Number.isFinite(w) ? Math.min(Math.max(w, 0), 20000) : 0,
+          reps: Number.isFinite(r) ? Math.min(Math.max(r, 1), 1000) : 1,
+          setId: uid('s'),
+          newWorkoutId: uid('w'),
           t: Date.now(), // wall-clock time logged, for session elapsed display
-        }
-        dispatch({ type: 'ADD_SET', set })
-        return set
+        })
       },
 
       updateSet(id, patch) {
+        // Same rules as set entry: weights are non-negative and reps are
+        // positive integers — the edit path must not admit values the add
+        // path forbids (negative volume, phantom 0-rep sets).
         const clean = {}
-        if (patch.weight != null) clean.weight = Number(patch.weight) || 0
-        if (patch.reps != null) clean.reps = Number(patch.reps) || 0
+        if (patch.weight != null) {
+          const w = Number(patch.weight)
+          clean.weight = Number.isFinite(w) ? Math.min(Math.max(w, 0), 20000) : 0
+        }
+        if (patch.reps != null) {
+          const r = Math.round(Number(patch.reps))
+          clean.reps = Number.isFinite(r) ? Math.min(Math.max(r, 1), 1000) : 1
+        }
         dispatch({ type: 'UPDATE_SET', id, patch: clean })
       },
 
@@ -296,13 +367,13 @@ export function StoreProvider({ children }) {
       },
 
       /**
-       * Copy the most recent session's sets for a machine into the given workout.
+       * Copy the most recent other session's sets for a machine onto a date.
        * Returns the number of sets copied.
        */
-      copyLastWorkoutForMachine(machineId, targetWorkoutId) {
-        // Find the latest workout date (other than the target) that has sets for this machine.
+      copyLastWorkoutForMachine(machineId, date) {
+        const target = state.workouts.find((w) => w.date === date)
         const candidates = state.workouts
-          .filter((w) => w.id !== targetWorkoutId)
+          .filter((w) => w.id !== target?.id)
           .filter((w) => state.sets.some((s) => s.workoutId === w.id && s.machineId === machineId))
           .sort((a, b) => b.date.localeCompare(a.date))
         const source = candidates[0]
@@ -310,20 +381,19 @@ export function StoreProvider({ children }) {
         const sourceSets = state.sets
           .filter((s) => s.workoutId === source.id && s.machineId === machineId)
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-        const baseOrder = state.sets.filter(
-          (s) => s.workoutId === targetWorkoutId && s.machineId === machineId,
-        ).length
-        const newSets = sourceSets.map((s, i) => ({
-          id: uid('s'),
-          workoutId: targetWorkoutId,
+        dispatch({
+          type: 'ADD_SETS_FOR_DATE',
+          date,
           machineId,
-          weight: s.weight,
-          reps: s.reps,
-          order: baseOrder + i,
-          t: Date.now(), // counts toward this session's elapsed time like any logged set
-        }))
-        if (newSets.length) dispatch({ type: 'ADD_SETS', sets: newSets })
-        return newSets.length
+          newWorkoutId: uid('w'),
+          sets: sourceSets.map((s) => ({
+            id: uid('s'),
+            weight: s.weight,
+            reps: s.reps,
+            t: Date.now(), // counts toward this session's elapsed time like any logged set
+          })),
+        })
+        return sourceSets.length
       },
 
       // Settings
@@ -628,11 +698,9 @@ export function StoreProvider({ children }) {
         const workouts = []
         const sets = []
         // 6 sessions over the last ~3 weeks, 3 machines each.
-        const today = new Date()
+        const today = todayISO()
         for (let session = 0; session < 6; session++) {
-          const d = new Date(today)
-          d.setDate(today.getDate() - session * 3)
-          const date = d.toISOString().slice(0, 10)
+          const date = addDaysISO(today, -session * 3)
           let workoutId = workoutIdByDate.get(date)
           if (!workoutId) {
             workoutId = uid('w')
