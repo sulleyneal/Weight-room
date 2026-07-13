@@ -17,7 +17,14 @@ const D = (n) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function syntheticState({ exercises = 6, sessions = 10, longNames = false, reps = 12, prToday = true }) {
+function syntheticState({
+  exercises = 6,
+  sessions = 10,
+  longNames = false,
+  reps = 12,
+  prToday = true,
+  startDay = 0, // distinct per fixture so no two mock cards share a date
+}) {
   const machines = Array.from({ length: exercises }, (_, i) => ({
     id: `m${i}`,
     name: longNames && i === 0 ? 'Seated Rotary Calf' : longNames ? `Single-Arm Cable Lateral Raise ${i}` : ['Leg Press', 'Chest Press', 'Lat Pulldown', 'Seated Row', 'Leg Curl', 'Shoulder Press', 'Biceps Curl', 'Triceps Extension', 'Leg Extension', 'Abdominal', 'Rotary Torso', 'Low Back', 'Seated Rotary Calf', 'Hip Thrust', 'Face Pull', 'Hack Squat'][i % 16],
@@ -29,7 +36,10 @@ function syntheticState({ exercises = 6, sessions = 10, longNames = false, reps 
     archived: false,
     createdAt: i,
   }))
-  const workouts = Array.from({ length: sessions }, (_, i) => ({ id: `w${i}`, date: D(i * 3) }))
+  const workouts = Array.from({ length: sessions }, (_, i) => ({
+    id: `w${i}`,
+    date: D(startDay + i * 3),
+  }))
   const sets = []
   let sid = 0
   workouts.forEach((w, wi) => {
@@ -87,11 +97,12 @@ function buildAllCases(state) {
     if (firstMachine) push('real · progress', 'progress', buildProgressMoment(state, firstMachine))
   }
 
-  // Torture cases.
-  const big = syntheticState({ exercises: 16, sessions: 6 })
+  // Torture cases (distinct startDay per fixture — no two mock cards may
+  // share a date, or same-day session numbering would look contradictory).
+  const big = syntheticState({ exercises: 16, sessions: 6, startDay: 0 })
   push('torture · 16-exercise session', 'session', buildSessionMoment(big, big.workouts[5].date))
 
-  const calf = syntheticState({ exercises: 4, sessions: 8, longNames: true, reps: 20 })
+  const calf = syntheticState({ exercises: 4, sessions: 8, longNames: true, reps: 20, startDay: 30 })
   const calfPRs = buildPRMoments(calf, calf.workouts[7].date)
   push('torture · long name + 20 reps PR', 'pr', calfPRs[0])
   push('torture · long-name progress', 'progress', buildProgressMoment(calf, 'm1'))
@@ -101,7 +112,7 @@ function buildAllCases(state) {
   push('torture · first-time PR (no history)', 'pr', freshPRs[0])
   push('torture · first-time progress', 'progress', buildProgressMoment(fresh, 'm0'))
 
-  const flat = syntheticState({ exercises: 5, sessions: 6, prToday: false })
+  const flat = syntheticState({ exercises: 5, sessions: 6, prToday: false, startDay: 60 })
   const flatSession = buildSessionMoment(flat, flat.workouts[5].date)
   push('torture · zero-PR session', 'session', flatSession)
 

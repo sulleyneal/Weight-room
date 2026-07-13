@@ -1,11 +1,11 @@
 # Share-imagery level-up — status
 
-**Current phase:** build → check loop, iteration 1 self-review done; brand
-checker + house-rules checker dispatched.
+**Current phase:** build → check loop, iteration 3 shipped; brand checker #3
+(fresh context) dispatched.
 **Latest cards:** rendered from the real backup + torture cases via the
 `#/share-lab` QA route (open it on any device to re-render live); current
 previews in `docs/share-previews/`.
-**Biggest open gap:** awaiting first fresh-context brand verdict.
+**Biggest open gap:** awaiting brand verdict on iteration 3.
 
 ## What was built
 
@@ -44,3 +44,15 @@ previews in `docs/share-previews/`.
   duplicated unit; PREV BEST relabelled PREV TOP SET (no cross-base misread);
   '+N MORE' overflow is a real table row with the hidden volume aggregate;
   chart axis/legend micro-type bumped for feed-size legibility.
+- iter 3 (brand checker #2: BAR NOT MET — caught a catastrophic regression my
+  fixed-geometry change introduced: the exercise-name block collided with the
+  hero numeral on every square PR card; also PR-marker encoding still split
+  across three systems, first-time progress story inherited square rhythm,
+  torture fixtures shared a date/session number). Fixed: square PR cards use a
+  single-line ellipsized name above a fixed hero slot (collision impossible by
+  construction; sparkline is story-only, consistently); ONE marker system
+  everywhere (gold ring = PR, ring+core = latest, legend covers both, session
+  rows use the same ring); first-time progress story recomposed (centered,
+  larger baseline lockup); axis figures anchored to their point levels with
+  ticks; fixture dates disambiguated; square session rows single-line
+  everywhere (sublabels are story-only).

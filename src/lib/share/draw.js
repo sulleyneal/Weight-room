@@ -4,7 +4,7 @@
 // ctx.filter, no roundRect (manual path below), no ctx.letterSpacing (manual
 // per-character tracking below, since Safari ignores the property).
 
-import { INK, GRID_PITCH, MARGIN, mono } from './theme.js'
+import { INK, ACCENT, GRID_PITCH, MARGIN, mono } from './theme.js'
 
 /** Manual rounded-rect path (ctx.roundRect is missing on older Safari). */
 export function roundRectPath(ctx, x, y, w, h, r) {
@@ -168,11 +168,48 @@ export function accentTick(ctx, x, y, h, color) {
 }
 
 /**
- * Real data line-chart. rows: [{x: 0..1, y: 0..1, flag?: bool}] normalized;
- * draws grid-aligned frame, the series as a thin line with dots on flagged
- * points, all inside {x, y, w, h}.
+ * The ONE mark for "PR session" everywhere on the cards: an open gold ring.
+ * `core: true` adds a filled center — that variant means "latest session"
+ * (gold core when the latest is itself a PR, series-colored otherwise).
  */
-export function lineChart(ctx, points, box, { color, dotColor, baseline = true } = {}) {
+export function prRing(ctx, x, y, r = 7, core = false, coreColor = ACCENT.pr) {
+  ctx.beginPath()
+  ctx.arc(x, y, r, 0, Math.PI * 2)
+  ctx.fillStyle = INK.bg
+  ctx.fill()
+  ctx.lineWidth = 3
+  ctx.strokeStyle = ACCENT.pr
+  ctx.stroke()
+  if (core) {
+    ctx.beginPath()
+    ctx.arc(x, y, Math.max(2.5, r * 0.45), 0, Math.PI * 2)
+    ctx.fillStyle = coreColor
+    ctx.fill()
+  }
+}
+
+/** Latest-session marker for a non-PR endpoint: series-colored ring + core. */
+function latestRing(ctx, x, y, r, color) {
+  ctx.beginPath()
+  ctx.arc(x, y, r, 0, Math.PI * 2)
+  ctx.fillStyle = INK.bg
+  ctx.fill()
+  ctx.lineWidth = 3
+  ctx.strokeStyle = color
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.arc(x, y, Math.max(2.5, r * 0.45), 0, Math.PI * 2)
+  ctx.fillStyle = color
+  ctx.fill()
+}
+
+/**
+ * Real data line-chart. points: [{x: 0..1, y: 0..1, flag?: bool}] normalized.
+ * One marker system: flagged (PR) sessions get the gold ring; the terminal
+ * point is ring+core ("latest"), gold when it is itself a PR, series-colored
+ * when not. Draws faint baselines plus the series inside {x, y, w, h}.
+ */
+export function lineChart(ctx, points, box, { color, baseline = true } = {}) {
   const { x, y, w, h } = box
   if (baseline) {
     ctx.strokeStyle = INK.hairlineFaint
@@ -198,26 +235,19 @@ export function lineChart(ctx, points, box, { color, dotColor, baseline = true }
     ctx.stroke()
   }
 
-  for (const p of points) {
-    if (!p.flag && points.length > 1) continue
-    ctx.beginPath()
-    ctx.arc(px(p), py(p), p.flag ? 7 : 6, 0, Math.PI * 2)
-    ctx.fillStyle = INK.bg
-    ctx.fill()
-    ctx.lineWidth = 3
-    ctx.strokeStyle = dotColor || color
-    ctx.stroke()
-  }
-  // Terminal dot always marked.
-  const last = points[points.length - 1]
-  ctx.beginPath()
-  ctx.arc(px(last), py(last), 8, 0, Math.PI * 2)
-  ctx.fillStyle = dotColor || color
-  ctx.fill()
+  points.forEach((p, i) => {
+    const isLast = i === points.length - 1
+    if (isLast) {
+      if (p.flag) prRing(ctx, px(p), py(p), 9, true)
+      else latestRing(ctx, px(p), py(p), 9, color)
+    } else if (p.flag) {
+      prRing(ctx, px(p), py(p), 7)
+    }
+  })
 }
 
-/** Compact sparkline (no frame), same normalized points. */
-export function sparkline(ctx, points, box, color) {
+/** Compact sparkline (no frame); same marker system as lineChart. */
+export function sparkline(ctx, points, box, { color, dotColor } = {}) {
   if (points.length < 2) return
   const { x, y, w, h } = box
   ctx.strokeStyle = color
@@ -232,8 +262,8 @@ export function sparkline(ctx, points, box, color) {
   })
   ctx.stroke()
   const last = points[points.length - 1]
-  ctx.beginPath()
-  ctx.arc(x + last.x * w, y + (1 - last.y) * h, 6, 0, Math.PI * 2)
-  ctx.fillStyle = color
-  ctx.fill()
+  const lx = x + last.x * w
+  const ly = y + (1 - last.y) * h
+  if (last.flag) prRing(ctx, lx, ly, 8, true, dotColor)
+  else latestRing(ctx, lx, ly, 8, color)
 }
