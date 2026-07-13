@@ -608,11 +608,13 @@ export function renderMuscleCard(moment, formatKey = 'square') {
 
   // Legend: dot + GROUP + share%, centered rows.
   ctx.font = mono(26, 600)
-  const entries = moment.groups.map((g) => ({
-    ...g,
-    label: `${g.group.toUpperCase()} ${Math.round(g.share * 100)}%`,
-    width: 26 + measureTracked(ctx, `${g.group.toUpperCase()} ${Math.round(g.share * 100)}%`, 2) + 44,
-  }))
+  const entries = moment.groups.map((g) => {
+    // Floor the display at 1% so a lightly- or reps-only-worked group never
+    // reads "0%" while its muscle is clearly lit on the figure.
+    const pct = Math.max(1, Math.round(g.share * 100))
+    const label = `${g.group.toUpperCase()} ${pct}%`
+    return { ...g, label, width: 26 + measureTracked(ctx, label, 2) + 44 }
+  })
   const perRow = Math.ceil(entries.length / legendRows)
   for (let r = 0; r < legendRows; r++) {
     const row = entries.slice(r * perRow, (r + 1) * perRow)
