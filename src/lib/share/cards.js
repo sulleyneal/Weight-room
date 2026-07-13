@@ -209,7 +209,7 @@ export function renderPRCard(moment, formatKey = 'square') {
     },
     hasGain
       ? { label: 'GAIN', chipText: `+${fmtNum(moment.deltaTop)}` }
-      : { label: 'LIFT SESSIONS', value: String(moment.sessionCount) },
+      : { label: 'SESSIONS', value: String(moment.sessionCount) },
   ]
   const colW = contentW / 3
   cols.forEach((c, i) => {
@@ -248,7 +248,7 @@ export function renderPRCard(moment, formatKey = 'square') {
     prRing(ctx, MARGIN + 12, midY, 9, true)
     ctx.font = mono(28, 600)
     ctx.fillStyle = INK.dim
-    trackedText(ctx, `${fmtE1(moment.e1rm)} — BASELINE SET`, MARGIN + 38, midY + 10, 1)
+    trackedText(ctx, `${fmtE1(moment.e1rm)} EST. 1RM — BASELINE`, MARGIN + 38, midY + 10, 1)
   }
 
   footer(ctx, w, h, `${moment.group} · SINCE ${fmtShortDate(moment.history[0]?.date || moment.date)}`, moment.unit)
@@ -337,11 +337,10 @@ export function renderSessionCard(moment, formatKey = 'square') {
   const shown = moment.exercises.slice(0, overflow ? maxRows - 1 : n)
   const rowCount = shown.length + (overflow ? 1 : 0)
   // Height-aware: rows stretch toward the footer (story gets properly tall
-  // rows), and whatever can't be absorbed is split above/below the table so
-  // the frame never ends in a slab of dead black.
+  // rows). The first row stays pinned to the column header — any slack the
+  // stretch can't absorb falls below the list, never between header and rows.
   rowH = Math.min(roomyH * (story ? 1.9 : 1.25), rowsSpace / rowCount)
   const tall = rowH > 120
-  y += Math.max(0, (rowsSpace - rowCount * rowH) / 2)
 
   for (const ex of shown) {
     const mid = y + rowH / 2
@@ -508,7 +507,9 @@ export function renderProgressCard(moment, formatKey = 'square') {
     ctx.lineTo(MARGIN + chartBox.w, midY)
     ctx.stroke()
     if (story) {
-      const cx = MARGIN + chartBox.w / 2
+      // Center on the CANVAS, not the plot area — the y-label gutter is
+      // empty on this card and off-center reads as a bug.
+      const cx = w / 2
       prRing(ctx, cx, midY - 120, 16, true)
       ctx.font = mono(52, 600)
       ctx.fillStyle = INK.text
