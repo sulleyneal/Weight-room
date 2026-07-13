@@ -1,0 +1,35 @@
+{
+  "name": "weight-room-connector",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Weight Room live connector — Neon-backed API + remote MCP server for Claude.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "db:init": "dotenv -e .env.local -- tsx scripts/init-db.ts",
+    "db:import": "dotenv -e .env.local -- tsx scripts/import-backup.ts"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "mcp-handler": "^1.0.2",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.7",
+    "dotenv-cli": "^8.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
