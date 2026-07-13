@@ -2,10 +2,15 @@
 
 Glanceable progress for the client + server + database + MCP connector build.
 
-**Current phase:** Foundation — server scaffold, schema, DB layer.
-**Latest checker verdict:** (none yet — build in progress)
-**Last deploy:** (not deployed yet)
-**Biggest open gap:** need Neon dev connection string + Vercel deploy token from owner to run live e2e and deploy (path a).
+**Current phase:** Built + proven in-process. Blocked on owner credentials for the LIVE deploy.
+**Latest checker verdict:** In-process falsification checker GREEN — 24/24 server tests
+(full OAuth+PKCE+DCR handshake, bad/missing token → 401, reads match DB, write can't
+touch history, no delete/overwrite tool exists, real-backup round-trip, torture cases).
+Client: 85/85, builds clean.
+**Last deploy:** (not deployed yet — needs Neon URL + Vercel access)
+**Biggest open gap:** Owner must provide a Neon dev connection string + a fresh JSON
+export (for migration), and either a Vercel token or self-deploy, so the server can go
+live and the fresh-context sub-agent checker + real Claude.ai connect can run.
 
 ## Architecture (approved plan)
 
@@ -36,4 +41,28 @@ Glanceable progress for the client + server + database + MCP connector build.
 
 ## Progress log
 
-- [in progress] Server scaffold (Next.js + Neon), schema migrations, DB layer.
+- [done] Server scaffold (Next.js + Neon), schema migrations, DB layer.
+- [done] Ported metrics + normalization; app_state round-trips a real backup losslessly.
+- [done] JSON API: /api/state (GET/PUT), /api/planned-sessions (+consume), /api/export,
+  /api/photos, /api/health. CORS to the Pages origin, bearer-gated.
+- [done] MCP server at /mcp (Streamable HTTP): 6 read tools + 1 least-privilege write
+  (create_planned_session → planned_sessions only).
+- [done] Auth: OAuth 2.1 + PKCE + DCR (metadata, /oauth/register|authorize|token),
+  single-secret login gate, bearer-swappable via CONNECTOR_AUTH_MODE.
+- [done] Client: src/lib/dbSync.js (background push, offline-tolerant, lazy photos),
+  ConnectorSync (pulls Claude's plans → session plan, live), Settings connector card.
+  Log-a-set flow untouched; 85/85 client tests still green.
+- [done] Migration script (db:import, replace or idempotent --merge).
+- [done] Tests: 24 server (pglite) incl. the in-process falsification checker + torture
+  cases; real pre-migration backup round-trips value-identically.
+- [BLOCKED] Live deploy to Vercel + fresh-context sub-agent checker vs the deployed URL +
+  house-rules checker — needs owner credentials (see "Biggest open gap").
+
+## Owner to-do (unblocks the finish)
+
+1. Create a Neon Postgres DB and hand me its connection string (a dev/throwaway one is
+   fine — rotate after).
+2. Export a fresh JSON backup from the app (Settings → Data → Export) and give it to me,
+   for the one-time migration.
+3. Either paste a short-lived Vercel access token (I deploy + set env), or import the repo
+   into Vercel yourself (root dir = server/) and I'll run the checker against your URL.

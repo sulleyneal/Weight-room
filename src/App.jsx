@@ -2,6 +2,7 @@ import { Component, lazy, Suspense } from 'react'
 import { useHashRoute, matchRoute, navigate } from './router.jsx'
 import { useStore } from './store/StoreContext.jsx'
 import BottomNav from './components/BottomNav.jsx'
+import ConnectorSync from './components/ConnectorSync.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import MachinesPage from './pages/MachinesPage.jsx'
 import LogWorkout from './pages/LogWorkout.jsx'
@@ -73,6 +74,7 @@ export default function App() {
 
   return (
     <div className="min-h-full flex flex-col">
+      <ConnectorSync />
       <main id="app-main" className="flex-1 overflow-y-auto pb-28 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-5">
           {notice && (
@@ -81,7 +83,9 @@ export default function App() {
               className={`card p-3 mb-4 text-sm flex items-start gap-2 ${
                 notice.tone === 'error'
                   ? 'border-red-500/50 text-red-300'
-                  : 'border-yellow-500/50 text-yellow-200'
+                  : notice.tone === 'info'
+                    ? 'border-brand-500/50 text-brand-200'
+                    : 'border-yellow-500/50 text-yellow-200'
               }`}
             >
               <span className="flex-1">{notice.msg}</span>
