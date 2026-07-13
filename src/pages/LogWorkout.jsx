@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store/StoreContext.jsx'
 import {
   todayISO,
@@ -17,7 +17,9 @@ import NumberStepper from '../components/NumberStepper.jsx'
 import MuscleChip from '../components/MuscleChip.jsx'
 import Modal from '../components/Modal.jsx'
 import MachinePhoto from '../components/MachinePhoto.jsx'
-import ShareModal from '../components/ShareModal.jsx'
+// Lazy + mounted-only-when-open: the share stack (cards, fonts loader,
+// anatomy data) must never ride the set-logging boot path.
+const ShareModal = lazy(() => import('../components/ShareModal.jsx'))
 import RestTimer from '../components/RestTimer.jsx'
 import {
   IconPlus,
@@ -291,7 +293,11 @@ export default function LogWorkout({ date: routeDate }) {
         </div>
       )}
 
-      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} date={date} />
+      {shareOpen && (
+        <Suspense fallback={null}>
+          <ShareModal open onClose={() => setShareOpen(false)} date={date} />
+        </Suspense>
+      )}
 
       <RoutinesModal
         open={routinesOpen}

@@ -5,102 +5,52 @@
 // per-character tracking below, since Safari ignores the property).
 
 import { INK, ACCENT, GRID_PITCH, MARGIN, mono } from './theme.js'
-import {
-  VIEW_W,
-  VIEW_H,
-  HEAD,
-  NECK_L,
-  NECK_R,
-  TORSO,
-  ARM_R,
-  ARM_L,
-  FRONT_LINES,
-  BACK_LINES,
-  FRONT_REGIONS,
-  BACK_REGIONS,
-  LINE_STROKE,
-  OUTLINE_STROKE,
-  LINE_WIDTH,
-  OUTLINE_WIDTH,
-  regionStyle,
-} from './bodyMap.js'
+import { BODY_FRONT, BODY_BACK, FRONT_BOUNDS, BACK_BOUNDS } from './bodyAnatomy.js'
+import { SLUG_GROUP } from './muscleRegions.js'
+import { MUSCLE_COLORS } from '../../data/seed.js'
+
+// Flat wash alpha for lit muscles — one tone per group, everywhere (legend
+// dots render at the same alpha so dot and region always match).
+export const WASH_ALPHA = 0.9
+
+// Non-muscle body parts stay neutral regardless of the session.
+const NEUTRAL_PARTS = new Set(['head', 'hair', 'neck', 'hands', 'feet', 'ankles', 'knees'])
+const TONE_MUSCLE = '#232c40' // unlit muscle
+const TONE_PART = '#1b2233' // head/hands/feet
 
 /**
- * Draw the front/back anatomy figure with muscle washes onto the canvas via
- * Path2D (no SVG rasterization step — Safari-safe and always crisp). The
- * figure scales to fit box.h, horizontally centered in box.w. Washes are
- * clipped to the body silhouette and separated with background-color knockout
- * strokes so adjacent same-color regions stay distinct.
+ * Draw the anatomical figure (front/back) with lit muscle groups.
+ * `lit` maps muscle slugs (see bodyAnatomy.js) to truthy when trained.
+ * Professionally drawn segmented figure — see bodyAnatomy.js attribution.
+ * Scales to fit box.h, horizontally centered in box.w.
  */
-export function drawFigure(ctx, view, intensities, box) {
-  const s = box.h / VIEW_H
-  const x0 = box.x + (box.w - VIEW_W * s) / 2
+export function drawFigure(ctx, view, lit, box) {
+  const muscles = view === 'back' ? BODY_BACK : BODY_FRONT
+  const b = view === 'back' ? BACK_BOUNDS : FRONT_BOUNDS
+  const s = box.h / b.h
+  const x0 = box.x + (box.w - b.w * s) / 2
   ctx.save()
-  ctx.translate(x0, box.y)
+  ctx.translate(x0 - b.x * s, box.y - b.y * s)
   ctx.scale(s, s)
-
-  const torso = new Path2D(TORSO)
-  const armR = new Path2D(ARM_R)
-  const armL = new Path2D(ARM_L)
-  const bodyClip = new Path2D()
-  bodyClip.addPath(torso)
-  bodyClip.addPath(armR)
-  bodyClip.addPath(armL)
-
-  // Mirrored draw helper: right-side regions repeat flipped across x=100.
-  const mirrored = (fn) => {
-    ctx.save()
-    ctx.translate(VIEW_W, 0)
-    ctx.scale(-1, 1)
-    fn()
-    ctx.restore()
-  }
-
-  // Color washes, clipped to the body, only for trained groups.
-  ctx.save()
-  ctx.clip(bodyClip)
-  const regions = view === 'back' ? BACK_REGIONS : FRONT_REGIONS
-  for (const r of regions) {
-    const style = regionStyle(r, intensities)
-    if (!style) continue
-    const path = new Path2D(r.d)
-    ctx.fillStyle = style.fill
-    ctx.globalAlpha = style.opacity
-    ctx.fill(path)
-    if (!r.noMirror) mirrored(() => ctx.fill(path))
-    // Knockout gap + crisp colored edge.
-    ctx.globalAlpha = 1
-    ctx.lineWidth = 2.2
-    ctx.strokeStyle = INK.bg
-    ctx.stroke(path)
-    if (!r.noMirror) mirrored(() => ctx.stroke(path))
-    ctx.globalAlpha = 0.55
-    ctx.lineWidth = 0.9
-    ctx.strokeStyle = style.fill
-    ctx.stroke(path)
-    if (!r.noMirror) mirrored(() => ctx.stroke(path))
-    ctx.globalAlpha = 1
-  }
-  ctx.restore()
-
-  // Silhouette parts + head/neck, then the contour lines on top.
-  ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  ctx.strokeStyle = OUTLINE_STROKE
-  ctx.lineWidth = OUTLINE_WIDTH
-  ctx.stroke(torso)
-  ctx.stroke(armR)
-  ctx.stroke(armL)
-  ctx.stroke(new Path2D(HEAD))
-  ctx.stroke(new Path2D(NECK_L))
-  ctx.stroke(new Path2D(NECK_R))
-  ctx.strokeStyle = LINE_STROKE
-  ctx.lineWidth = LINE_WIDTH
-  ctx.globalAlpha = 0.85
-  for (const d of view === 'back' ? BACK_LINES : FRONT_LINES) {
-    ctx.stroke(new Path2D(d))
+  for (const m of muscles) {
+    const neutral = NEUTRAL_PARTS.has(m.slug)
+    const isLit = !neutral && lit[m.slug]
+    const group = SLUG_GROUP[m.slug]
+    ctx.fillStyle = isLit
+      ? MUSCLE_COLORS[group] || MUSCLE_COLORS.Other
+      : neutral
+        ? TONE_PART
+        : TONE_MUSCLE
+    ctx.globalAlpha = isLit ? WASH_ALPHA : 1
+    for (const side of Object.values(m.path)) {
+      for (const d of side) {
+        const p = new Path2D(d)
+        ctx.fill(p)
+      }
+    }
+    ctx.globalAlpha = 1
   }
-  ctx.globalAlpha = 1
   ctx.restore()
 }
 

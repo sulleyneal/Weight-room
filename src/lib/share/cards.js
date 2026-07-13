@@ -24,8 +24,8 @@ import {
   prRing,
   drawFigure,
   chipRight,
+  WASH_ALPHA,
 } from './draw.js'
-import { groupWashAlpha, FRONT_REGIONS, BACK_REGIONS } from './bodyMap.js'
 import { unitLabel } from '../units.js'
 
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
@@ -615,10 +615,7 @@ export function renderMuscleCard(moment, formatKey = 'square') {
       ctx.beginPath()
       ctx.arc(lx + 9, ly - 9, 9, 0, Math.PI * 2)
       ctx.fillStyle = groupColor(e.group)
-      ctx.globalAlpha = groupWashAlpha(e.group, moment.intensities, [
-        ...FRONT_REGIONS,
-        ...BACK_REGIONS,
-      ])
+      ctx.globalAlpha = WASH_ALPHA // dots render exactly like the washes
       ctx.fill()
       ctx.globalAlpha = 1
       ctx.font = mono(26, 600)

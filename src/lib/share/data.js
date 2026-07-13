@@ -7,8 +7,7 @@ import {
   sessionsForMachine,
   prSessionsForMachine,
 } from '../metrics.js'
-import { computeIntensities } from './bodyMap.js'
-import { regionVolumesFor } from './muscleRegions.js'
+import { computeIntensities, regionVolumesFor } from './muscleRegions.js'
 
 const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0)
 
