@@ -1,11 +1,23 @@
 # Share-imagery level-up — status
 
-**Current phase:** build → check loop, iteration 3 shipped; brand checker #3
-(fresh context) dispatched.
-**Latest cards:** rendered from the real backup + torture cases via the
-`#/share-lab` QA route (open it on any device to re-render live); current
-previews in `docs/share-previews/`.
-**Biggest open gap:** awaiting brand verdict on iteration 3.
+**Current phase:** DONE. Brand checker #4 (fresh context, pixel measurements):
+**"BAR MET — nothing left to find"** — sibling templates pixel-identical, all
+arithmetic exact (recomputed independently), one marker grammar across every
+card, legible at 400px feed size, edge states designed rather than broken.
+House-rules checker: 7/7 PASS on the running build (2 taps to a 2160×2160 PNG,
+zero external requests, fonts lazy-load only at share time, no layout shift on
+the log page, backup round-trip value-identical, 76/76 tests).
+**Latest cards:** `docs/share-previews/`; every card × format × torture case
+re-renders live at `#/share-lab` on any device.
+
+**Safari note (the Run Receipt scar):** a true WebKit browser could not be
+installed in the audit environment (proxy blocked the download), so the proof
+is: Safari-safe canvas primitives only (no html2canvas, no roundRect /
+letterSpacing / ctx.filter / OffscreenCanvas — manual implementations), the
+Share tap calls navigator.share synchronously with a pre-rendered blob (inside
+iOS's user-activation window), fonts loaded via FontFace + document.fonts
+(the canvas-supported path on WebKit), and `#/share-lab` ships in production —
+open it once on the iPhone to eyeball the full matrix on real WebKit.
 
 ## What was built
 
@@ -56,3 +68,10 @@ previews in `docs/share-previews/`.
   larger baseline lockup); axis figures anchored to their point levels with
   ticks; fixture dates disambiguated; square session rows single-line
   everywhere (sublabels are story-only).
+- iter 4 (brand checker #3: BAR NOT MET on two measurable edge-state faults —
+  baseline lockup centered on plot area instead of canvas; story table header
+  orphaned by slack distribution). Fixed both + label unification.
+- FINAL (brand checker #4, fresh context): **BAR MET — nothing left to find.**
+  Remaining nitpicks it explicitly would not block a ship on (quiet zone on the
+  5-row story, sparkline endpoint-only rings à la Whoop/Oura, three baseline
+  lockup stylings) are recorded here as accepted.
