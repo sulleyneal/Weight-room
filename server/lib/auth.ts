@@ -33,6 +33,18 @@ export function checkLoginSecret(password: string): boolean {
   return Boolean(secret) && safeEqual(password, secret)
 }
 
+/**
+ * True ONLY for the static connector secret — not OAuth-issued tokens. The
+ * full-access sync REST API (state replace, photo delete) requires this, so a
+ * token minted for Claude via OAuth can reach the MCP tools (read + create a
+ * planned session) but can NEVER overwrite logged history. House Rule 4.
+ */
+export function verifyStaticToken(token: string | null): boolean {
+  if (!token) return false
+  const secret = connectorToken()
+  return Boolean(secret) && safeEqual(token, secret)
+}
+
 /** Public base URL of this server (no trailing slash). */
 export function baseUrl(req: Request): string {
   const configured = process.env.CONNECTOR_BASE_URL
