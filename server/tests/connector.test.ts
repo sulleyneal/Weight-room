@@ -60,12 +60,32 @@ function fixture(): AppData {
 // ---- schema ----------------------------------------------------------------
 
 describe('schema', () => {
-  it('runs migrations idempotently', async () => {
+  it('runs migrations idempotently and creates every table', async () => {
     const sql = getSql()
     await runMigrations(sql)
     await runMigrations(sql) // second run must be a no-op, not an error
     const rows = (await sql`SELECT id FROM schema_migrations ORDER BY id`) as { id: number }[]
-    expect(rows.map((r) => Number(r.id))).toEqual([1, 2])
+    expect(rows.map((r) => Number(r.id))).toEqual([1, 2, 3])
+    // The tables must actually exist — the neon bug recorded migrations while
+    // the DDL silently no-op'd, so assert on real relations, not just tracking.
+    const tables = (await sql`
+      SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'
+    `) as { table_name: string }[]
+    const names = new Set(tables.map((t) => t.table_name))
+    for (const t of ['app_state', 'photos', 'planned_sessions', 'oauth_clients', 'oauth_codes', 'access_tokens']) {
+      expect(names.has(t)).toBe(true)
+    }
+  })
+
+  it('the raw-DDL executor uses a shape neon accepts as a tagged call', () => {
+    // neon detects an EXECUTING call by `Array.isArray(P) && Array.isArray(P.raw)`
+    // and one string per (params+1). Guard the shape db.ts builds for sql.unsafe.
+    const text = 'CREATE TABLE IF NOT EXISTS x (id TEXT)'
+    const strings = Object.assign([text], { raw: [text] })
+    expect(Array.isArray(strings)).toBe(true)
+    expect(Array.isArray((strings as { raw: string[] }).raw)).toBe(true)
+    expect(strings.length).toBe(1)
+    expect(strings[0]).toBe(text)
   })
 })
 

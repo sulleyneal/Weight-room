@@ -37,7 +37,15 @@ export function getSql(): Sql {
   const base = neon(url)
   const sql = ((strings: TemplateStringsArray, ...values: unknown[]) =>
     base(strings, ...(values as never[]))) as unknown as Sql
-  sql.unsafe = (text: string) => base.query(text)
+  // Run raw DDL through neon's EXECUTING (tagged) path. neon detects a tagged
+  // call by `Array.isArray(P) && Array.isArray(P.raw)`, so a one-element
+  // template with a `.raw` runs `text` verbatim. NB: neon's own `sql.unsafe()`
+  // returns a fragment for embedding — it does NOT execute — which silently
+  // no-op'd every migration statement here before this fix.
+  sql.unsafe = (text: string) => {
+    const strings = Object.assign([text], { raw: [text] }) as unknown as TemplateStringsArray
+    return base(strings)
+  }
   _sql = sql
   return _sql
 }

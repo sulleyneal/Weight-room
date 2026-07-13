@@ -2,7 +2,12 @@
 
 Glanceable progress for the client + server + database + MCP connector build.
 
-**Current phase:** Built + proven in-process. Blocked on owner credentials for the LIVE deploy.
+**Current phase:** LIVE at https://weight-room-pearl.vercel.app. FIXED a critical migration bug (neon's sql.unsafe returns a fragment, not an executor — DDL silently no-op'd so tables were never created while being recorded as applied; migration #3 self-heals, health now probes app_state). Also enforced REST-API least-privilege (static token only; OAuth tokens can't reach state-overwrite). Redeploying. Migration
+proven on the owner's real backup (13 exercises / 10 workouts / 171 sets / 12 photos round-trip
+value-identical; connector reads return real numbers). House-rules/security checker running.
+Remaining: owner connects the app (seeds live DB) + adds the connector in Claude (the sandbox
+can't reach the Vercel URL — network policy 403 — so the final live confirmation is owner-side,
+which is inherent to a connector since Claude.ai is the client).
 **Latest checker verdict:** In-process falsification checker GREEN — 24/24 server tests
 (full OAuth+PKCE+DCR handshake, bad/missing token → 401, reads match DB, write can't
 touch history, no delete/overwrite tool exists, real-backup round-trip, torture cases).
