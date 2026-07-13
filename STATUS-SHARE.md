@@ -94,6 +94,12 @@ open it once on the iPhone to eyeball the full matrix on real WebKit.
   on the hand-drawn art → pivot); integration checker (verified honest mapping,
   exact wash/legend hex match, one ship-blocker: story-format figures scaled
   until their hands interlocked → fixed with a guaranteed gutter + re-centering;
-  plus progress-chart session ticks). Final targeted verification pending.
+  plus progress-chart session ticks). Final targeted verification (fresh
+  context, pixel measurements): **BAR MET — nothing left to find** — story
+  figures separated by a measured 281px gutter while still spanning 84% of the
+  canvas; progress charts plot all 5 sessions (gold rings for PRs, muted tick
+  for the non-PR session, ring+core latest) so the footer count agrees with the
+  markers; lit muscles on the real-session card match its actual exercises
+  exactly, legend hexes match washes, all chrome intact.
 - Accepted nitpicks (source artwork, not renderer): heel "sole slab" detailing
   on the back figure, detached thumb crescents — invisible at feed size.
