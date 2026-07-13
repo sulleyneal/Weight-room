@@ -33,11 +33,13 @@ import {
   IconChart,
   IconList,
   IconSparkle,
+  IconClose,
 } from '../components/Icons.jsx'
 import RoutinesModal from '../components/RoutinesModal.jsx'
 import ImportPlanModal from '../components/ImportPlanModal.jsx'
 import AskClaudeButton from '../components/AskClaudeButton.jsx'
 import { useWakeLock } from '../hooks/useWakeLock.js'
+import { loadPlanForDate, savePlanForDate, clearPlanForDate } from '../lib/sessionPlan.js'
 
 // Only real, non-future ISO dates may become a workout key: the route param
 // and the date input are both attacker-controllable ("#/log/banana",
@@ -60,26 +62,64 @@ export default function LogWorkout({ date: routeDate }) {
   const [shareOpen, setShareOpen] = useState(false)
   const [routinesOpen, setRoutinesOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  // The session plan — exercises added ahead of logging, their targets, and the
+  // program order — is restored from storage so an imported/started workout
+  // survives the app being backgrounded before any set is logged. Read once.
+  const bootPlanRef = useRef(undefined)
+  if (bootPlanRef.current === undefined) {
+    bootPlanRef.current = loadPlanForDate(sanitizeDate(routeDate))
+  }
+  const bootPlan = bootPlanRef.current
   // Machines explicitly added to this session that don't yet have sets.
-  const [addedMachineIds, setAddedMachineIds] = useState([])
+  const [addedMachineIds, setAddedMachineIds] = useState(bootPlan?.addedMachineIds || [])
   // Program state for this session: per-machine targets + the program's order.
-  const [sessionTargets, setSessionTargets] = useState({})
-  const [templateOrder, setTemplateOrder] = useState([])
+  const [sessionTargets, setSessionTargets] = useState(bootPlan?.sessionTargets || {})
+  const [templateOrder, setTemplateOrder] = useState(bootPlan?.templateOrder || [])
   // Session to preload when the date next settles (e.g. starting a program).
   const pendingPreloadRef = useRef(null)
+  // Skip the reset effect's first run — the initial plan is already loaded above.
+  const dateInitRef = useRef(true)
+  // On a date change the reset effect and the persist effect fire in the same
+  // commit, but the plan state still holds the OLD date's values (setState is
+  // async). Skip that one transitional persist so we never write the previous
+  // day's plan under the new date's key.
+  const skipPersistRef = useRef(false)
 
   useEffect(() => {
     if (routeDate) setDate(sanitizeDate(routeDate))
   }, [routeDate])
 
-  // Reset session-scoped state when the date changes — unless a preload is pending.
+  // On date change, restore that day's persisted plan (or a pending preload, or
+  // empty). The initial render is skipped — its plan came from bootPlan.
   useEffect(() => {
+    if (dateInitRef.current) {
+      dateInitRef.current = false
+      return
+    }
+    skipPersistRef.current = true
     const pending = pendingPreloadRef.current
     pendingPreloadRef.current = null
-    setAddedMachineIds(pending?.ids || [])
-    setSessionTargets(pending?.targets || {})
-    setTemplateOrder(pending?.order || [])
+    if (pending) {
+      setAddedMachineIds(pending.ids || [])
+      setSessionTargets(pending.targets || {})
+      setTemplateOrder(pending.order || [])
+      return
+    }
+    const saved = loadPlanForDate(date)
+    setAddedMachineIds(saved?.addedMachineIds || [])
+    setSessionTargets(saved?.sessionTargets || {})
+    setTemplateOrder(saved?.templateOrder || [])
   }, [date])
+
+  // Persist the plan whenever it changes so it outlives a backgrounded app.
+  // Kept out of the backup/export data — this is ephemeral session scaffolding.
+  useEffect(() => {
+    if (skipPersistRef.current) {
+      skipPersistRef.current = false
+      return
+    }
+    savePlanForDate(date, { addedMachineIds, sessionTargets, templateOrder })
+  }, [date, addedMachineIds, sessionTargets, templateOrder])
 
   // Keep the screen awake while logging — no unlocking between sets.
   useWakeLock(true)
@@ -140,6 +180,20 @@ export default function LogWorkout({ date: routeDate }) {
   function addMachineToSession(machineId) {
     setPickerOpen(false)
     setAddedMachineIds((ids) => (ids.includes(machineId) ? ids : [...ids, machineId]))
+  }
+
+  // Drop a still-unlogged exercise from the plan (targets + order too). Only
+  // offered on blocks with no logged sets — once sets exist you remove it by
+  // deleting them, which keeps history the single source of truth.
+  function removeFromSession(machineId) {
+    setAddedMachineIds((ids) => ids.filter((id) => id !== machineId))
+    setTemplateOrder((order) => order.filter((id) => id !== machineId))
+    setSessionTargets((targets) => {
+      if (!(machineId in targets)) return targets
+      const next = { ...targets }
+      delete next[machineId]
+      return next
+    })
   }
 
   function exportThisWorkout() {
@@ -276,6 +330,7 @@ export default function LogWorkout({ date: routeDate }) {
               unit={unit}
               store={store}
               target={targetFor(machineId)}
+              onRemove={() => removeFromSession(machineId)}
             />
           )
         })}
@@ -350,7 +405,7 @@ function UndoSnackbar() {
 
 // ---- Per-machine set entry block ----------------------------------------
 
-function MachineBlock({ machine, date, unit, store, target }) {
+function MachineBlock({ machine, date, unit, store, target, onRemove }) {
   const { state } = store
 
   const workout = state.workouts.find((w) => w.date === date)
@@ -360,6 +415,9 @@ function MachineBlock({ machine, date, unit, store, target }) {
       .filter((s) => s.workoutId === workout.id && s.machineId === machine.id)
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   }, [workout, state.sets, machine.id])
+
+  // A planned exercise (no sets logged yet) can be dropped from the session.
+  const removable = sets.length === 0 && typeof onRemove === 'function'
 
   // Most recent prior set for sensible defaults.
   const lastEverSet = useMemo(() => {
@@ -455,17 +513,28 @@ function MachineBlock({ machine, date, unit, store, target }) {
 
   return (
     <div className="card overflow-hidden">
-      <button
-        className="w-full flex items-center gap-3 p-3 text-left hover:bg-ink-700/40 transition"
-        onClick={() => navigate(`/machine/${machine.id}`)}
-      >
-        <MachinePhoto machine={machine} className="w-12 h-12 shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="font-bold truncate">{machine.name}</div>
-          <div className="text-xs text-slate-400 truncate">{machine.model || machine.type}</div>
-        </div>
-        <MuscleChip group={machine.muscleGroup} />
-      </button>
+      <div className="flex items-center">
+        <button
+          className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left hover:bg-ink-700/40 transition"
+          onClick={() => navigate(`/machine/${machine.id}`)}
+        >
+          <MachinePhoto machine={machine} className="w-12 h-12 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="font-bold truncate">{machine.name}</div>
+            <div className="text-xs text-slate-400 truncate">{machine.model || machine.type}</div>
+          </div>
+          <MuscleChip group={machine.muscleGroup} />
+        </button>
+        {removable && (
+          <button
+            className="shrink-0 flex items-center justify-center w-11 h-11 mr-1 text-slate-500 hover:text-red-400"
+            onClick={onRemove}
+            aria-label={`Remove ${machine.name} from this session`}
+          >
+            <IconClose size={18} />
+          </button>
+        )}
+      </div>
 
       {/* Program target + live range-topped cue */}
       {target && (
