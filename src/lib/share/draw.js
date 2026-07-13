@@ -5,6 +5,77 @@
 // per-character tracking below, since Safari ignores the property).
 
 import { INK, ACCENT, GRID_PITCH, MARGIN, mono } from './theme.js'
+import {
+  VIEW_W,
+  VIEW_H,
+  BODY_OUTLINE,
+  HEAD_PATH,
+  FRONT_LINE_PATHS,
+  BACK_LINE_PATHS,
+  FRONT_REGIONS,
+  BACK_REGIONS,
+  LINE_STROKE,
+  OUTLINE_STROKE,
+  LINE_WIDTH,
+  OUTLINE_WIDTH,
+  regionStyle,
+} from './bodyMap.js'
+
+/**
+ * Draw the front/back anatomy figure with muscle washes onto the canvas via
+ * Path2D (no SVG rasterization step — Safari-safe and always crisp). The
+ * figure scales to fit box.h, horizontally centered in box.w.
+ */
+export function drawFigure(ctx, view, intensities, box) {
+  const s = box.h / VIEW_H
+  const x0 = box.x + (box.w - VIEW_W * s) / 2
+  ctx.save()
+  ctx.translate(x0, box.y)
+  ctx.scale(s, s)
+
+  // Color washes behind the line art, only for trained groups.
+  const regions = view === 'back' ? BACK_REGIONS : FRONT_REGIONS
+  for (const r of regions) {
+    const style = regionStyle(r.group, intensities)
+    if (!style) continue
+    ctx.fillStyle = style.fill
+    ctx.globalAlpha = style.opacity
+    for (const shape of r.shapes) {
+      if (shape.t === 'path') {
+        ctx.fill(new Path2D(shape.d))
+      } else {
+        ctx.beginPath()
+        ctx.ellipse(
+          shape.cx,
+          shape.cy,
+          shape.rx,
+          shape.ry,
+          ((shape.rot || 0) * Math.PI) / 180,
+          0,
+          Math.PI * 2,
+        )
+        ctx.fill()
+      }
+    }
+  }
+  ctx.globalAlpha = 1
+
+  // Outline + head, then the muscle contour lines on top.
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.strokeStyle = OUTLINE_STROKE
+  ctx.lineWidth = OUTLINE_WIDTH
+  ctx.stroke(new Path2D(BODY_OUTLINE))
+  ctx.stroke(new Path2D(HEAD_PATH))
+  ctx.strokeStyle = LINE_STROKE
+  ctx.lineWidth = LINE_WIDTH
+  ctx.globalAlpha = 0.9
+  for (const d of view === 'back' ? BACK_LINE_PATHS : FRONT_LINE_PATHS) {
+    ctx.stroke(new Path2D(d))
+  }
+  ctx.globalAlpha = 1
+  ctx.restore()
+}
 
 /** Manual rounded-rect path (ctx.roundRect is missing on older Safari). */
 export function roundRectPath(ctx, x, y, w, h, r) {

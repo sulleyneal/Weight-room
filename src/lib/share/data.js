@@ -7,6 +7,7 @@ import {
   sessionsForMachine,
   prSessionsForMachine,
 } from '../metrics.js'
+import { computeIntensities } from './bodyMap.js'
 
 const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0)
 
@@ -207,6 +208,27 @@ export function buildProgressMoment(state, machineId, windowSessions = 20) {
     windowStart: first.date,
     windowEnd: current.date,
   }
+}
+
+/**
+ * Muscle-map moment: group volumes/shares/intensities for the body-figure
+ * card, derived from the session moment.
+ */
+export function buildMuscleMoment(state, date) {
+  const session = buildSessionMoment(state, date)
+  if (!session) return null
+  const groupVolumes = {}
+  for (const ex of session.exercises) {
+    groupVolumes[ex.group] = (groupVolumes[ex.group] || 0) + ex.volume
+  }
+  const groups = Object.entries(groupVolumes)
+    .map(([group, volume]) => ({
+      group,
+      volume,
+      share: session.totalVolume ? volume / session.totalVolume : 0,
+    }))
+    .sort((a, b) => b.volume - a.volume)
+  return { ...session, groups, intensities: computeIntensities(groupVolumes) }
 }
 
 /** Machines trained on a date, for the progress-card picker. */

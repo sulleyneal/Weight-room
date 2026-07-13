@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store/StoreContext.jsx'
 import { loadShareFonts } from '../lib/share/fonts.js'
-import { buildSessionMoment, buildPRMoments, buildProgressMoment } from '../lib/share/data.js'
+import {
+  buildSessionMoment,
+  buildPRMoments,
+  buildProgressMoment,
+  buildMuscleMoment,
+} from '../lib/share/data.js'
 import { CARD_RENDERERS } from '../lib/share/cards.js'
 import PageHeader from '../components/PageHeader.jsx'
 
@@ -93,6 +98,7 @@ function buildAllCases(state) {
     const prs = buildPRMoments(state, latest.date)
     push('real · headline PR', 'pr', prs[0])
     push('real · session', 'session', buildSessionMoment(state, latest.date))
+    push('real · muscle map', 'muscles', buildMuscleMoment(state, latest.date))
     const firstMachine = state.sets.find((s) => s.workoutId === latest.id)?.machineId
     if (firstMachine) push('real · progress', 'progress', buildProgressMoment(state, firstMachine))
   }
@@ -115,6 +121,9 @@ function buildAllCases(state) {
   const flat = syntheticState({ exercises: 5, sessions: 6, prToday: false, startDay: 60 })
   const flatSession = buildSessionMoment(flat, flat.workouts[5].date)
   push('torture · zero-PR session', 'session', flatSession)
+  // Muscle map with a single trained group (worst case for the legend/washes).
+  const oneGroup = syntheticState({ exercises: 1, sessions: 3, startDay: 90 })
+  push('torture · one-group muscle map', 'muscles', buildMuscleMoment(oneGroup, oneGroup.workouts[2].date))
 
   return cases
 }
