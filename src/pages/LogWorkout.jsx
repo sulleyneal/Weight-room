@@ -17,7 +17,7 @@ import NumberStepper from '../components/NumberStepper.jsx'
 import MuscleChip from '../components/MuscleChip.jsx'
 import Modal from '../components/Modal.jsx'
 import MachinePhoto from '../components/MachinePhoto.jsx'
-import SummaryModal from '../components/SummaryModal.jsx'
+import ShareModal from '../components/ShareModal.jsx'
 import RestTimer from '../components/RestTimer.jsx'
 import {
   IconPlus,
@@ -55,7 +55,7 @@ export default function LogWorkout({ date: routeDate }) {
 
   const [date, setDate] = useState(() => sanitizeDate(routeDate))
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [summaryOpen, setSummaryOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [routinesOpen, setRoutinesOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   // Machines explicitly added to this session that don't yet have sets.
@@ -189,11 +189,6 @@ export default function LogWorkout({ date: routeDate }) {
     return (machineId) => sessionTargets[machineId] || fallback.get(machineId) || null
   }, [state.routines, sessionTargets])
 
-  const daySummary = useMemo(
-    () => (summaryOpen ? store.buildDaySummary(date) : null),
-    [summaryOpen, date, store],
-  )
-
   const machineById = useMemo(
     () => new Map(state.machines.map((m) => [m.id, m])),
     [state.machines],
@@ -286,8 +281,8 @@ export default function LogWorkout({ date: routeDate }) {
 
       {todaysSets.length > 0 && (
         <div className="grid grid-cols-2 gap-2 mt-4">
-          <button className="btn-ghost" onClick={() => setSummaryOpen(true)}>
-            <IconChart size={20} /> Summary
+          <button className="btn-ghost" onClick={() => setShareOpen(true)}>
+            <IconChart size={20} /> Share card
           </button>
           <button className="btn-ghost" onClick={exportThisWorkout}>
             <IconDownload size={20} /> Export JSON
@@ -296,7 +291,7 @@ export default function LogWorkout({ date: routeDate }) {
         </div>
       )}
 
-      <SummaryModal open={summaryOpen} onClose={() => setSummaryOpen(false)} summary={daySummary} />
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} date={date} />
 
       <RoutinesModal
         open={routinesOpen}
