@@ -5,6 +5,54 @@
 // per-character tracking below, since Safari ignores the property).
 
 import { INK, ACCENT, GRID_PITCH, MARGIN, mono } from './theme.js'
+import { BODY_FRONT, BODY_BACK, FRONT_BOUNDS, BACK_BOUNDS } from './bodyAnatomy.js'
+import { SLUG_GROUP } from './muscleRegions.js'
+import { MUSCLE_COLORS } from '../../data/seed.js'
+
+// Flat wash alpha for lit muscles — one tone per group, everywhere (legend
+// dots render at the same alpha so dot and region always match).
+export const WASH_ALPHA = 0.9
+
+// Non-muscle body parts stay neutral regardless of the session.
+const NEUTRAL_PARTS = new Set(['head', 'hair', 'neck', 'hands', 'feet', 'ankles', 'knees'])
+const TONE_MUSCLE = '#232c40' // unlit muscle
+const TONE_PART = '#1b2233' // head/hands/feet
+
+/**
+ * Draw the anatomical figure (front/back) with lit muscle groups.
+ * `lit` maps muscle slugs (see bodyAnatomy.js) to truthy when trained.
+ * Professionally drawn segmented figure — see bodyAnatomy.js attribution.
+ * Scales to fit box.h, horizontally centered in box.w.
+ */
+export function drawFigure(ctx, view, lit, box) {
+  const muscles = view === 'back' ? BODY_BACK : BODY_FRONT
+  const b = view === 'back' ? BACK_BOUNDS : FRONT_BOUNDS
+  const s = box.h / b.h
+  const x0 = box.x + (box.w - b.w * s) / 2
+  ctx.save()
+  ctx.translate(x0 - b.x * s, box.y - b.y * s)
+  ctx.scale(s, s)
+  ctx.lineJoin = 'round'
+  for (const m of muscles) {
+    const neutral = NEUTRAL_PARTS.has(m.slug)
+    const isLit = !neutral && lit[m.slug]
+    const group = SLUG_GROUP[m.slug]
+    ctx.fillStyle = isLit
+      ? MUSCLE_COLORS[group] || MUSCLE_COLORS.Other
+      : neutral
+        ? TONE_PART
+        : TONE_MUSCLE
+    ctx.globalAlpha = isLit ? WASH_ALPHA : 1
+    for (const side of Object.values(m.path)) {
+      for (const d of side) {
+        const p = new Path2D(d)
+        ctx.fill(p)
+      }
+    }
+    ctx.globalAlpha = 1
+  }
+  ctx.restore()
+}
 
 /** Manual rounded-rect path (ctx.roundRect is missing on older Safari). */
 export function roundRectPath(ctx, x, y, w, h, r) {
@@ -161,6 +209,15 @@ export function chip(ctx, text, x, y, { color, size = 24, pad = 14 } = {}) {
   return w
 }
 
+/** chip() anchored by its RIGHT edge (margin-locked top-right chips). */
+export function chipRight(ctx, text, rightX, y, opts = {}) {
+  const size = opts.size ?? 24
+  const pad = opts.pad ?? 14
+  ctx.font = mono(size, 700)
+  const w = measureTracked(ctx, text, size * 0.12) + pad * 2
+  return chip(ctx, text, rightX - w, y, opts)
+}
+
 /** Small solid accent tick (muscle-group coding). */
 export function accentTick(ctx, x, y, h, color) {
   ctx.fillStyle = color
@@ -242,6 +299,15 @@ export function lineChart(ctx, points, box, { color, baseline = true } = {}) {
       else latestRing(ctx, px(p), py(p), 9, color)
     } else if (p.flag) {
       prRing(ctx, px(p), py(p), 7)
+    } else {
+      // Small neutral tick so every session is visibly a point on the line
+      // (point count always matches the "N SESSIONS" claim).
+      ctx.beginPath()
+      ctx.arc(px(p), py(p), 4, 0, Math.PI * 2)
+      ctx.fillStyle = color
+      ctx.globalAlpha = 0.55
+      ctx.fill()
+      ctx.globalAlpha = 1
     }
   })
 }

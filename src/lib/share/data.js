@@ -7,6 +7,7 @@ import {
   sessionsForMachine,
   prSessionsForMachine,
 } from '../metrics.js'
+import { computeIntensities, regionVolumesFor } from './muscleRegions.js'
 
 const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0)
 
@@ -206,6 +207,34 @@ export function buildProgressMoment(state, machineId, windowSessions = 20) {
     totalSessions: all.length,
     windowStart: first.date,
     windowEnd: current.date,
+  }
+}
+
+/**
+ * Muscle-map moment: group volumes/shares/intensities for the body-figure
+ * card, derived from the session moment.
+ */
+export function buildMuscleMoment(state, date) {
+  const session = buildSessionMoment(state, date)
+  if (!session) return null
+  const groupVolumes = {}
+  for (const ex of session.exercises) {
+    groupVolumes[ex.group] = (groupVolumes[ex.group] || 0) + ex.volume
+  }
+  const groups = Object.entries(groupVolumes)
+    .map(([group, volume]) => ({
+      group,
+      volume,
+      share: session.totalVolume ? volume / session.totalVolume : 0,
+    }))
+    .sort((a, b) => b.volume - a.volume)
+  return {
+    ...session,
+    groups,
+    // Region-level intensities, so "MUSCLES WORKED" only lights what the
+    // session's actual exercises hit (a calf PR lights calves; Low Back
+    // lights the erectors, not the lats).
+    intensities: computeIntensities(regionVolumesFor(session.exercises)),
   }
 }
 

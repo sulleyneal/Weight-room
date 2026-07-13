@@ -6,6 +6,7 @@ import {
   buildSessionMoment,
   buildPRMoments,
   buildProgressMoment,
+  buildMuscleMoment,
   machinesTrainedOn,
 } from '../lib/share/data.js'
 import { CARD_RENDERERS } from '../lib/share/cards.js'
@@ -44,6 +45,10 @@ export default function ShareModal({ open, onClose, date, initialMachineId = nul
     const session = buildSessionMoment(state, date)
     if (session) {
       out.push({ key: 'session', type: 'session', label: 'Session', moment: session })
+    }
+    const muscles = buildMuscleMoment(state, date)
+    if (muscles) {
+      out.push({ key: 'muscles', type: 'muscles', label: 'Muscle map', moment: muscles })
     }
     for (const machineId of machinesTrainedOn(state, date)) {
       const m = machineById.get(machineId)

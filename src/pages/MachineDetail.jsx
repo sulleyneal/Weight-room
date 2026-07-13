@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import {
   ResponsiveContainer,
   LineChart,
@@ -21,7 +21,7 @@ import PageHeader from '../components/PageHeader.jsx'
 import MachinePhoto from '../components/MachinePhoto.jsx'
 import MuscleChip from '../components/MuscleChip.jsx'
 import MachineForm from '../components/MachineForm.jsx'
-import ShareModal from '../components/ShareModal.jsx'
+const ShareModal = lazy(() => import('../components/ShareModal.jsx'))
 import { IconEdit, IconTrash, IconPlus, IconTrophy, IconImage } from '../components/Icons.jsx'
 
 const METRICS = [
@@ -241,13 +241,15 @@ export default function MachineDetail({ id }) {
       )}
 
       <MachineForm open={editing} onClose={() => setEditing(false)} machine={machine} />
-      {sessions.length > 0 && (
-        <ShareModal
-          open={sharing}
-          onClose={() => setSharing(false)}
-          date={sessions[sessions.length - 1].date}
-          initialMachineId={machine.id}
-        />
+      {sessions.length > 0 && sharing && (
+        <Suspense fallback={null}>
+          <ShareModal
+            open
+            onClose={() => setSharing(false)}
+            date={sessions[sessions.length - 1].date}
+            initialMachineId={machine.id}
+          />
+        </Suspense>
       )}
     </div>
   )

@@ -22,6 +22,9 @@ import {
   lineChart,
   sparkline,
   prRing,
+  drawFigure,
+  chipRight,
+  WASH_ALPHA,
 } from './draw.js'
 import { unitLabel } from '../units.js'
 
@@ -271,20 +274,18 @@ export function renderSessionCard(moment, formatKey = 'square') {
   // Title row: program day left, PR chip right on the same line.
   let y = story ? 372 : 252
   const title = (moment.programName || 'Training Session').toUpperCase()
+  const prChipText = `${moment.prCount} PR${moment.prCount > 1 ? 'S' : ''} TODAY`
   let chipReserve = 0
   if (moment.prCount > 0) {
     ctx.font = mono(26, 700)
-    chipReserve = measureTracked(ctx, `${moment.prCount} PRS TODAY`, 3) + 60
+    chipReserve = measureTracked(ctx, prChipText, 26 * 0.12) + 96
   }
   const tSize = fitText(ctx, title, (s) => sans(s, 800), story ? 100 : 84, 48, contentW - chipReserve)
   ctx.font = sans(tSize, 800)
   ctx.fillStyle = INK.text
   ctx.fillText(title, MARGIN, y)
   if (moment.prCount > 0) {
-    chip(ctx, `${moment.prCount} PR${moment.prCount > 1 ? 'S' : ''} TODAY`, w - MARGIN - chipReserve + 34, y - tSize * 0.32, {
-      color: ACCENT.pr,
-      size: 26,
-    })
+    chipRight(ctx, prChipText, w - MARGIN, y - tSize * 0.32, { color: ACCENT.pr, size: 26 })
   }
   y += story ? 110 : 84
 
@@ -541,8 +542,111 @@ export function renderProgressCard(moment, formatKey = 'square') {
   return canvas
 }
 
+// ---- 4. Muscle-map card ------------------------------------------------------
+
+export function renderMuscleCard(moment, formatKey = 'square') {
+  const spec = FORMATS[formatKey]
+  const { canvas, ctx } = makeCanvas(spec)
+  const { w, h } = spec
+  const story = formatKey === 'story'
+  const contentW = w - MARGIN * 2
+  const footerTop = footerTopOf(h)
+
+  drawGround(ctx, w, h)
+  header(ctx, w, moment.date)
+
+  // Kicker + title (program day), PR chip on the title line like the session card.
+  let y = story ? 340 : 224
+  metaLabel(ctx, 'MUSCLES WORKED', MARGIN, y, { size: 24, color: ACCENT.brand })
+  y += story ? 150 : 128
+  const title = (moment.programName || 'Training Session').toUpperCase()
+  const prChipText = `${moment.prCount} PR${moment.prCount > 1 ? 'S' : ''} TODAY`
+  let chipReserve = 0
+  if (moment.prCount > 0) {
+    ctx.font = mono(26, 700)
+    chipReserve = measureTracked(ctx, prChipText, 26 * 0.12) + 96
+  }
+  const tSize = fitText(ctx, title, (s) => sans(s, 800), story ? 100 : 84, 44, contentW - chipReserve)
+  ctx.font = sans(tSize, 800)
+  ctx.fillStyle = INK.text
+  ctx.fillText(title, MARGIN, y)
+  if (moment.prCount > 0) {
+    chipRight(ctx, prChipText, w - MARGIN, y - tSize * 0.32, { color: ACCENT.pr, size: 26 })
+  }
+
+  // Legend anchored above the footer; figures fill the space between.
+  const legendRows = moment.groups.length > 4 ? 2 : 1
+  const legendH = legendRows * 54
+  const legendTop = footerTop - legendH - (story ? 44 : 24)
+  let figTop = y + (story ? 90 : 56)
+  const figLabelH = 56
+  const zoneH = legendTop - figTop - figLabelH - (story ? 60 : 36)
+
+  // The pair must always clear a minimum gutter — on tall formats the
+  // height-fitted figures would otherwise scale until the hands interlock.
+  const minGap = story ? 140 : 110
+  let figH = zoneH
+  let figW = figH * 0.5 // figure aspect (622x1244)
+  if (figW * 2 + minGap > contentW) {
+    figW = (contentW - minGap) / 2
+    figH = figW * 2
+    figTop += (zoneH - figH) / 2 // re-center the shorter figures in the zone
+  }
+  const gap = Math.min(story ? 220 : 150, contentW - figW * 2)
+  const pairW = figW * 2 + gap
+  const startX = MARGIN + (contentW - pairW) / 2
+  drawFigure(ctx, 'front', moment.intensities, { x: startX, y: figTop, w: figW, h: figH })
+  drawFigure(ctx, 'back', moment.intensities, { x: startX + figW + gap, y: figTop, w: figW, h: figH })
+  metaLabel(ctx, 'FRONT', startX + figW / 2, figTop + figH + figLabelH - 12, {
+    size: 24,
+    align: 'center',
+  })
+  metaLabel(ctx, 'BACK', startX + figW + gap + figW / 2, figTop + figH + figLabelH - 12, {
+    size: 24,
+    align: 'center',
+  })
+
+  // Legend: dot + GROUP + share%, centered rows.
+  ctx.font = mono(26, 600)
+  const entries = moment.groups.map((g) => ({
+    ...g,
+    label: `${g.group.toUpperCase()} ${Math.round(g.share * 100)}%`,
+    width: 26 + measureTracked(ctx, `${g.group.toUpperCase()} ${Math.round(g.share * 100)}%`, 2) + 44,
+  }))
+  const perRow = Math.ceil(entries.length / legendRows)
+  for (let r = 0; r < legendRows; r++) {
+    const row = entries.slice(r * perRow, (r + 1) * perRow)
+    if (!row.length) continue
+    const rowW = row.reduce((sum, e) => sum + e.width, 0) - 44
+    let lx = MARGIN + (contentW - rowW) / 2
+    const ly = legendTop + 26 + r * 54
+    for (const e of row) {
+      ctx.beginPath()
+      ctx.arc(lx + 9, ly - 9, 9, 0, Math.PI * 2)
+      ctx.fillStyle = groupColor(e.group)
+      ctx.globalAlpha = WASH_ALPHA // dots render exactly like the washes
+      ctx.fill()
+      ctx.globalAlpha = 1
+      ctx.font = mono(26, 600)
+      ctx.fillStyle = INK.dim
+      trackedText(ctx, e.label, lx + 30, ly, 2)
+      lx += e.width
+    }
+  }
+
+  footer(
+    ctx,
+    w,
+    h,
+    `${moment.totalSets} SETS · ${fmtVol(moment.totalVolume)} VOL · SESSION ${String(moment.sessionNumber).padStart(3, '0')}`,
+    moment.unit,
+  )
+  return canvas
+}
+
 export const CARD_RENDERERS = {
   pr: renderPRCard,
   session: renderSessionCard,
   progress: renderProgressCard,
+  muscles: renderMuscleCard,
 }

@@ -71,7 +71,35 @@ open it once on the iPhone to eyeball the full matrix on real WebKit.
 - iter 4 (brand checker #3: BAR NOT MET on two measurable edge-state faults —
   baseline lockup centered on plot area instead of canvas; story table header
   orphaned by slack distribution). Fixed both + label unification.
-- FINAL (brand checker #4, fresh context): **BAR MET — nothing left to find.**
-  Remaining nitpicks it explicitly would not block a ship on (quiet zone on the
-  5-row story, sparkline endpoint-only rings à la Whoop/Oura, three baseline
-  lockup stylings) are recorded here as accepted.
+- iter 5 (brand checker #4, fresh context): **BAR MET — nothing left to find**
+  on the three-card set. Remaining nitpicks it explicitly would not block a
+  ship on (quiet zone on the 5-row story, sparkline endpoint-only rings à la
+  Whoop/Oura, three baseline lockup stylings) recorded here as accepted.
+
+## Muscle-map card (added post-BAR-MET at the owner's request)
+
+- The old body map (removed with the razed summary) came back as a fourth card.
+  Two rounds of hand-authored figure geometry failed the "looks like a real
+  person" bar (checkers: figure-8 shoulders, alien proportions; owner agreed).
+- Pivot: per-muscle SVG paths extracted from react-native-body-highlighter
+  v3.2.0 (MIT, attributed in `src/lib/share/bodyAnatomy.js`) — a professionally
+  drawn segmented figure, 16 addressable muscles per view.
+- "MUSCLES WORKED" is honest at the muscle level: machine names map to real
+  muscles (leg curl → hamstrings, calf → calves+tibialis, low back → erectors,
+  pulldown → upper-back+biceps…) with group fallback; flat one-tone-per-group
+  washes match the legend dots exactly.
+- The share stack (modal, cards, fonts, anatomy data) lazy-loads only when the
+  share modal opens — nothing rides the logging boot path.
+- Checker rounds on this card: figure-quality checker (BAR NOT MET: 10 defects
+  on the hand-drawn art → pivot); integration checker (verified honest mapping,
+  exact wash/legend hex match, one ship-blocker: story-format figures scaled
+  until their hands interlocked → fixed with a guaranteed gutter + re-centering;
+  plus progress-chart session ticks). Final targeted verification (fresh
+  context, pixel measurements): **BAR MET — nothing left to find** — story
+  figures separated by a measured 281px gutter while still spanning 84% of the
+  canvas; progress charts plot all 5 sessions (gold rings for PRs, muted tick
+  for the non-PR session, ring+core latest) so the footer count agrees with the
+  markers; lit muscles on the real-session card match its actual exercises
+  exactly, legend hexes match washes, all chrome intact.
+- Accepted nitpicks (source artwork, not renderer): heel "sole slab" detailing
+  on the back figure, detached thumb crescents — invisible at feed size.
