@@ -5,6 +5,7 @@ import { unitLabel } from '../lib/units.js'
 import { downloadJSON } from '../lib/download.js'
 import PageHeader from '../components/PageHeader.jsx'
 import CloudSyncCard from '../components/CloudSyncCard.jsx'
+import ConnectorSyncCard from '../components/ConnectorSyncCard.jsx'
 import { IconImage, IconTrash, IconDownload } from '../components/Icons.jsx'
 
 export default function SettingsPage() {
@@ -269,6 +270,12 @@ export default function SettingsPage() {
       <section className="mb-6">
         <h2 className="font-bold mb-2 px-1">Cloud sync</h2>
         <CloudSyncCard onStatus={setStatus} />
+      </section>
+
+      {/* Claude connector */}
+      <section className="mb-6">
+        <h2 className="font-bold mb-2 px-1">Claude connector</h2>
+        <ConnectorSyncCard onStatus={setStatus} />
       </section>
 
       {/* Danger zone */}

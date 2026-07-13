@@ -22,6 +22,7 @@ import {
   SCHEMA_VERSION,
 } from '../lib/persistence.js'
 import { isSyncEnabled, pushBackup } from '../lib/gistSync.js'
+import { isConnectorEnabled, pushState, syncPhotos } from '../lib/dbSync.js'
 import { seedMachines, COMMON_EXERCISES, STARTER_PROGRAMS, PROGRAM_MACHINES } from '../data/seed.js'
 import { uid } from '../lib/id.js'
 import { todayISO, addDaysISO, epley1RM, setVolume, prSessionsForMachine } from '../lib/metrics.js'
@@ -303,6 +304,28 @@ export function StoreProvider({ children }) {
         .catch(() => {}) // status surfaces in Settings; never interrupt logging
     }, 8000)
     return () => clearTimeout(syncTimer.current)
+  }, [state.machines, state.workouts, state.sets, state.routines, state.settings, state.loaded])
+
+  // Connector sync (opt-in): push the whole document to the Neon-backed server a
+  // few seconds after data settles, so a workout logged on the phone is readable
+  // through the Claude connector within a minute. Background + best-effort; a
+  // failure is surfaced in Settings and never interrupts logging.
+  const connTimer = useRef(null)
+  useEffect(() => {
+    if (!state.loaded || !isConnectorEnabled()) return
+    clearTimeout(connTimer.current)
+    connTimer.current = setTimeout(() => {
+      pushState({
+        machines: state.machines,
+        workouts: state.workouts,
+        sets: state.sets,
+        routines: state.routines,
+        settings: state.settings,
+      })
+        .then(() => syncPhotos().catch(() => {}))
+        .catch(() => {})
+    }, 8000)
+    return () => clearTimeout(connTimer.current)
   }, [state.machines, state.workouts, state.sets, state.routines, state.settings, state.loaded])
 
   // ---- Actions (memoized) ----
@@ -728,7 +751,14 @@ export function StoreProvider({ children }) {
   }, [state])
 
   const value = useMemo(
-    () => ({ state, notice, dismissNotice: () => setNotice(null), undoable, ...actions }),
+    () => ({
+      state,
+      notice,
+      dismissNotice: () => setNotice(null),
+      pushNotice: (msg, tone = 'info') => setNotice({ tone, msg }),
+      undoable,
+      ...actions,
+    }),
     [state, notice, undoable, actions],
   )
 

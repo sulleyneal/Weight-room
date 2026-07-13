@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -38,5 +39,8 @@ export default defineConfig({
   plugins: [react(), stampServiceWorker()],
   test: {
     environment: 'jsdom',
+    // The connector server (server/) is its own project with its own vitest and
+    // deps — keep it out of the client suite.
+    exclude: [...configDefaults.exclude, 'server/**'],
   },
 })

@@ -121,6 +121,22 @@ export default function LogWorkout({ date: routeDate }) {
     savePlanForDate(date, { addedMachineIds, sessionTargets, templateOrder })
   }, [date, addedMachineIds, sessionTargets, templateOrder])
 
+  // A plan Claude pushed through the connector was just saved for this date —
+  // reload it so it appears live without a manual refresh.
+  useEffect(() => {
+    const onApplied = (e) => {
+      if (e.detail?.date && e.detail.date !== date) return
+      const saved = loadPlanForDate(date)
+      if (!saved) return
+      skipPersistRef.current = true
+      setAddedMachineIds(saved.addedMachineIds || [])
+      setSessionTargets(saved.sessionTargets || {})
+      setTemplateOrder(saved.templateOrder || [])
+    }
+    window.addEventListener('connector-plan-applied', onApplied)
+    return () => window.removeEventListener('connector-plan-applied', onApplied)
+  }, [date])
+
   // Keep the screen awake while logging — no unlocking between sets.
   useWakeLock(true)
 
