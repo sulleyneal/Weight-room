@@ -8,10 +8,14 @@ import { INK, ACCENT, GRID_PITCH, MARGIN, mono } from './theme.js'
 import {
   VIEW_W,
   VIEW_H,
-  BODY_OUTLINE,
-  HEAD_PATH,
-  FRONT_LINE_PATHS,
-  BACK_LINE_PATHS,
+  HEAD,
+  NECK_L,
+  NECK_R,
+  TORSO,
+  ARM_R,
+  ARM_L,
+  FRONT_LINES,
+  BACK_LINES,
   FRONT_REGIONS,
   BACK_REGIONS,
   LINE_STROKE,
@@ -24,7 +28,9 @@ import {
 /**
  * Draw the front/back anatomy figure with muscle washes onto the canvas via
  * Path2D (no SVG rasterization step — Safari-safe and always crisp). The
- * figure scales to fit box.h, horizontally centered in box.w.
+ * figure scales to fit box.h, horizontally centered in box.w. Washes are
+ * clipped to the body silhouette and separated with background-color knockout
+ * strokes so adjacent same-color regions stay distinct.
  */
 export function drawFigure(ctx, view, intensities, box) {
   const s = box.h / VIEW_H
@@ -33,44 +39,65 @@ export function drawFigure(ctx, view, intensities, box) {
   ctx.translate(x0, box.y)
   ctx.scale(s, s)
 
-  // Color washes behind the line art, only for trained groups.
+  const torso = new Path2D(TORSO)
+  const armR = new Path2D(ARM_R)
+  const armL = new Path2D(ARM_L)
+  const bodyClip = new Path2D()
+  bodyClip.addPath(torso)
+  bodyClip.addPath(armR)
+  bodyClip.addPath(armL)
+
+  // Mirrored draw helper: right-side regions repeat flipped across x=100.
+  const mirrored = (fn) => {
+    ctx.save()
+    ctx.translate(VIEW_W, 0)
+    ctx.scale(-1, 1)
+    fn()
+    ctx.restore()
+  }
+
+  // Color washes, clipped to the body, only for trained groups.
+  ctx.save()
+  ctx.clip(bodyClip)
   const regions = view === 'back' ? BACK_REGIONS : FRONT_REGIONS
   for (const r of regions) {
     const style = regionStyle(r.group, intensities)
     if (!style) continue
+    const path = new Path2D(r.d)
     ctx.fillStyle = style.fill
     ctx.globalAlpha = style.opacity
-    for (const shape of r.shapes) {
-      if (shape.t === 'path') {
-        ctx.fill(new Path2D(shape.d))
-      } else {
-        ctx.beginPath()
-        ctx.ellipse(
-          shape.cx,
-          shape.cy,
-          shape.rx,
-          shape.ry,
-          ((shape.rot || 0) * Math.PI) / 180,
-          0,
-          Math.PI * 2,
-        )
-        ctx.fill()
-      }
-    }
+    ctx.fill(path)
+    if (!r.noMirror) mirrored(() => ctx.fill(path))
+    // Knockout gap + crisp colored edge.
+    ctx.globalAlpha = 1
+    ctx.lineWidth = 2.2
+    ctx.strokeStyle = INK.bg
+    ctx.stroke(path)
+    if (!r.noMirror) mirrored(() => ctx.stroke(path))
+    ctx.globalAlpha = 0.55
+    ctx.lineWidth = 0.9
+    ctx.strokeStyle = style.fill
+    ctx.stroke(path)
+    if (!r.noMirror) mirrored(() => ctx.stroke(path))
+    ctx.globalAlpha = 1
   }
-  ctx.globalAlpha = 1
+  ctx.restore()
 
-  // Outline + head, then the muscle contour lines on top.
+  // Silhouette parts + head/neck, then the contour lines on top.
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   ctx.strokeStyle = OUTLINE_STROKE
   ctx.lineWidth = OUTLINE_WIDTH
-  ctx.stroke(new Path2D(BODY_OUTLINE))
-  ctx.stroke(new Path2D(HEAD_PATH))
+  ctx.stroke(torso)
+  ctx.stroke(armR)
+  ctx.stroke(armL)
+  ctx.stroke(new Path2D(HEAD))
+  ctx.stroke(new Path2D(NECK_L))
+  ctx.stroke(new Path2D(NECK_R))
   ctx.strokeStyle = LINE_STROKE
   ctx.lineWidth = LINE_WIDTH
-  ctx.globalAlpha = 0.9
-  for (const d of view === 'back' ? BACK_LINE_PATHS : FRONT_LINE_PATHS) {
+  ctx.globalAlpha = 0.85
+  for (const d of view === 'back' ? BACK_LINES : FRONT_LINES) {
     ctx.stroke(new Path2D(d))
   }
   ctx.globalAlpha = 1

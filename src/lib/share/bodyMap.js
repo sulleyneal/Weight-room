@@ -1,20 +1,21 @@
-// Thin line-art front/back anatomy for the muscle-map share card.
+// Refined line-art front/back anatomy for the muscle-map share card.
 //
-// The body is drawn as light contour lines (outline + muscle delineations)
-// with no solid fill; muscle groups trained that day get a translucent color
-// wash painted behind the line art. Geometry is point data + a Catmull-Rom
-// smoother producing SVG path strings, rendered onto the card canvas via
-// Path2D (Safari-safe). Coordinates use a 200x400 viewBox, centered x=100.
+// Authored as mirrored point data smoothed with Catmull-Rom → SVG path
+// strings, rendered via Path2D (Safari-safe). The body is composed of parts
+// (head, open-sided neck, torso+legs, hanging arms) so silhouettes stay
+// clean; muscle-group washes are separate closed regions CLIPPED to the body
+// with knockout strokes between them, so adjacent same-color muscles (trap /
+// lat / erector) read as distinct shapes. Coordinates use a 200×400 viewBox,
+// centered x=100; right-side regions are mirrored at draw time.
 
 import { MUSCLE_COLORS } from '../../data/seed.js'
 
 export const VIEW_W = 200
 export const VIEW_H = 400
-export const VIEWBOX = `0 0 ${VIEW_W} ${VIEW_H}`
 
 export const LINE_STROKE = '#c2cbdb'
 export const OUTLINE_STROKE = '#d8e0ec'
-export const LINE_WIDTH = 1.3
+export const LINE_WIDTH = 1.1
 export const OUTLINE_WIDTH = 1.7
 
 // ---- smoothing + mirroring ----
@@ -40,116 +41,109 @@ function bez(pts, closed) {
   return d + (closed ? 'Z' : '')
 }
 const mir = ([x, y]) => [200 - x, y]
+const mirPts = (pts) => pts.map(mir)
 
-// ---- body outline + head ----
-const OUTLINE_PTS = [
-  [100, 56], [113, 58], [126, 66], [148, 80], [160, 102], [160, 152], [159, 200],
-  [156, 218], [147, 231], [141, 217], [139, 178], [135, 150], [129, 99], [122, 132],
-  [114, 172], [126, 206], [137, 244], [125, 300], [130, 332], [116, 370], [123, 386],
-  [104, 386], [106, 370], [108, 300], [104, 246], [100, 240],
+// ---- body parts ----
+export const HEAD =
+  'M100 12 C111 12 118 21 118 33 C118 45 111 54 100 54 C89 54 82 45 82 33 C82 21 89 12 100 12 Z'
+// Open-sided neck: two strokes, no seam across chin or chest.
+export const NECK_L = bez([[92, 48], [91, 62], [88, 72]], false)
+export const NECK_R = bez([[108, 48], [109, 62], [112, 72]], false)
+
+const TORSO_R = [
+  [100, 72], [116, 74], [138, 80], [150, 88], [146, 102], [141, 116],
+  [136, 140], [131, 164], [132, 182], [135, 198], [134, 216], [131, 242],
+  [126, 272], [122, 296], [123, 316], [122, 334], [115, 362], [113, 376],
+  [118, 384], [112, 388], [104, 388], [103, 376], [104, 356], [107, 330],
+  [105, 306], [107, 278], [110, 252], [104, 230], [100, 226],
 ]
-export const BODY_OUTLINE = bez([...OUTLINE_PTS, ...OUTLINE_PTS.slice(1, -1).reverse().map(mir)], true)
-export const HEAD_PATH =
-  'M100 14 C111 14 119 23 119 35 C119 48 111 58 100 58 C89 58 81 48 81 35 C81 23 89 14 100 14 Z'
+export const TORSO = bez([...TORSO_R, ...mirPts(TORSO_R.slice(1, -1)).reverse()], true)
 
-// ---- muscle contour lines (center drawn as-is; side mirrored to both sides) ----
-const FRONT_LINES = {
-  center: [[[100, 96], [100, 122], [100, 172]]],
-  side: [
-    [[100, 93], [111, 85], [122, 84]], // clavicle
-    [[122, 84], [126, 96], [127, 106], [117, 118], [100, 120]], // pectoral
-    [[124, 88], [142, 82], [158, 102], [157, 120]], // deltoid cap
-    [[157, 116], [161, 140], [156, 160]], // biceps
-    [[109, 124], [112, 148], [109, 170]], // rectus border
-    [[100, 134], [109, 134]],
-    [[100, 147], [109, 147]],
-    [[100, 159], [109, 159]], // ab rows
-    [[100, 188], [113, 175], [119, 170]], // lower-ab V
-    [[121, 134], [117, 154], [121, 170]], // oblique
-    [[129, 216], [134, 256], [127, 298]], // quad outer
-    [[115, 222], [117, 262], [114, 300]], // quad center
-    [[104, 220], [106, 262], [105, 300]], // quad inner
-    [[105, 302], [115, 307], [125, 301]], // knee
-    [[123, 316], [128, 344], [119, 366]], // shin
-  ],
-}
-const BACK_LINES = {
-  center: [
-    [[100, 78], [100, 132], [100, 184]], // spine
-    [[100, 208], [100, 234]], // glute cleft
-  ],
-  side: [
-    [[100, 78], [120, 90], [127, 102]], // trap upper
-    [[127, 102], [112, 114], [100, 122]], // trap lower
-    [[128, 102], [126, 136], [110, 154], [100, 156]], // lat
-    [[124, 88], [142, 82], [158, 102], [157, 118]], // rear delt
-    [[157, 116], [161, 140], [156, 160]], // triceps
-    [[106, 130], [106, 182]], // erector
-    [[100, 206], [118, 208], [126, 221], [117, 234], [100, 233]], // glute
-    [[129, 242], [134, 274], [127, 300]], // hamstring outer
-    [[104, 244], [106, 274], [105, 300]], // hamstring inner
-    [[123, 314], [129, 338], [119, 362]], // calf
-  ],
-}
-function linePaths(set) {
-  return [...set.center, ...set.side, ...set.side.map((a) => a.map(mir))].map((pts) =>
-    bez(pts, false),
-  )
-}
-export const FRONT_LINE_PATHS = linePaths(FRONT_LINES)
-export const BACK_LINE_PATHS = linePaths(BACK_LINES)
-
-// ---- muscle highlight zones (filled behind the lines, only when trained) ----
-const delts = [
-  { t: 'ellipse', cx: 146, cy: 100, rx: 14, ry: 14 },
-  { t: 'ellipse', cx: 54, cy: 100, rx: 14, ry: 14 },
+const ARM_R_PTS = [
+  [139, 84], [152, 82], [162, 92], [165, 106], [166, 124], [167, 146],
+  [165, 164], [159, 188], [155, 206], [156, 218], [151, 226], [144, 220],
+  [145, 204], [147, 184], [149, 158], [148, 134], [144, 112], [141, 96],
 ]
-const arms = [
-  { t: 'ellipse', cx: 158, cy: 136, rx: 9, ry: 24, rot: -4 },
-  { t: 'ellipse', cx: 42, cy: 136, rx: 9, ry: 24, rot: 4 },
+export const ARM_R = bez(ARM_R_PTS, true)
+export const ARM_L = bez(mirPts(ARM_R_PTS), true)
+
+// ---- interior contour lines ----
+const mirLine = (pts) => bez(mirPts(pts), false)
+const clavicle = [[100, 86], [112, 82], [126, 82], [136, 86]]
+const pecUnder = [[100, 122], [112, 125], [124, 120], [131, 111]]
+const rectusBorder = [[112, 132], [114, 152], [112, 176], [108, 192]]
+const quadSeamOuter = [[118, 244], [121, 272], [117, 296]]
+const quadSeamInner = [[108, 250], [110, 276], [108, 298]]
+const knee = [[108, 306], [114, 310], [120, 306]]
+const shin = [[116, 322], [118, 344], [112, 364]]
+
+export const FRONT_LINES = [
+  bez(clavicle, false), mirLine(clavicle),
+  bez([[100, 88], [100, 124]], false),
+  bez(pecUnder, false), mirLine(pecUnder),
+  bez(rectusBorder, false), mirLine(rectusBorder),
+  bez([[92, 144], [108, 144]], false),
+  bez([[92, 158], [108, 158]], false),
+  bez([[93, 172], [107, 172]], false),
+  bez([[88, 196], [100, 210], [112, 196]], false),
+  bez(quadSeamOuter, false), mirLine(quadSeamOuter),
+  bez(quadSeamInner, false), mirLine(quadSeamInner),
+  bez(knee, false), mirLine(knee),
+  bez(shin, false), mirLine(shin),
 ]
 
+const trapLine = [[100, 76], [116, 84], [124, 96]]
+const latLine = [[124, 98], [130, 124], [118, 152], [104, 162]]
+const erectorSeam = [[106, 130], [106, 176]]
+const hamSeam = [[112, 252], [114, 278], [111, 300]]
+const calfHead = [[110, 318], [114, 334], [112, 352]]
+const triSeam = [[156, 120], [158, 142]]
+
+export const BACK_LINES = [
+  bez(trapLine, false), mirLine(trapLine),
+  bez([[100, 76], [100, 196]], false),
+  bez(latLine, false), mirLine(latLine),
+  bez(erectorSeam, false), mirLine(erectorSeam),
+  bez([[100, 208], [100, 238]], false),
+  bez([[86, 214], [100, 222], [114, 214]], false),
+  bez(hamSeam, false), mirLine(hamSeam),
+  bez(calfHead, false), mirLine(calfHead),
+  bez(triSeam, false), mirLine(triSeam),
+]
+
+// ---- muscle-group wash regions (right side; mirrored at draw time) ----
+const REGION_PATHS = {
+  deltF: bez([[139, 84], [152, 82], [162, 92], [165, 104], [158, 112], [146, 108], [140, 96]], true),
+  pec: bez([[102, 92], [124, 90], [135, 99], [132, 112], [120, 120], [104, 118]], true),
+  biceps: bez([[147, 112], [158, 114], [164, 128], [161, 146], [151, 148], [146, 130]], true),
+  abs: bez([[94, 130], [106, 130], [110, 136], [111, 158], [108, 184], [100, 198], [92, 184], [89, 158], [90, 136]], true),
+  quad: bez([[133, 222], [136, 252], [130, 288], [120, 300], [109, 294], [107, 262], [112, 234], [124, 220]], true),
+  trap: bez([[100, 74], [118, 82], [122, 92], [110, 104], [100, 110]], true),
+  lat: bez([[124, 100], [132, 118], [126, 140], [112, 154], [105, 158], [106, 132], [114, 112]], true),
+  tri: bez([[148, 110], [160, 112], [165, 128], [162, 146], [152, 148], [146, 128]], true),
+  erector: bez([[102, 120], [108, 122], [108, 180], [102, 184]], true),
+  glute: bez([[85, 208], [100, 205], [115, 208], [119, 226], [109, 242], [91, 242], [81, 226]], true),
+  ham: bez([[131, 244], [133, 270], [126, 296], [112, 300], [108, 274], [110, 250], [120, 242]], true),
+  calfB: bez([[121, 316], [123, 336], [115, 356], [108, 352], [106, 332], [110, 316]], true),
+}
+
+// Entries: { group, d, noMirror? } — noMirror for center-line regions.
 export const FRONT_REGIONS = [
-  { group: 'Shoulders', shapes: delts },
-  {
-    group: 'Chest',
-    shapes: [
-      { t: 'ellipse', cx: 114, cy: 108, rx: 16, ry: 13, rot: -8 },
-      { t: 'ellipse', cx: 86, cy: 108, rx: 16, ry: 13, rot: 8 },
-    ],
-  },
-  { group: 'Core', shapes: [{ t: 'path', d: 'M89 122 Q100 119 111 122 L109 170 Q100 176 91 170 Z' }] },
-  { group: 'Biceps', shapes: arms },
-  {
-    group: 'Legs',
-    shapes: [
-      { t: 'ellipse', cx: 118, cy: 258, rx: 17, ry: 46 },
-      { t: 'ellipse', cx: 82, cy: 258, rx: 17, ry: 46 },
-    ],
-  },
+  { group: 'Shoulders', d: REGION_PATHS.deltF },
+  { group: 'Chest', d: REGION_PATHS.pec },
+  { group: 'Biceps', d: REGION_PATHS.biceps },
+  { group: 'Core', d: REGION_PATHS.abs, noMirror: true },
+  { group: 'Legs', d: REGION_PATHS.quad },
 ]
-
 export const BACK_REGIONS = [
-  { group: 'Shoulders', shapes: delts },
-  {
-    group: 'Back',
-    shapes: [
-      { t: 'path', d: 'M100 78 L128 102 L100 126 L72 102 Z' },
-      { t: 'path', d: 'M128 102 Q126 138 110 156 L100 156 L100 126 Z' },
-      { t: 'path', d: 'M72 102 Q74 138 90 156 L100 156 L100 126 Z' },
-    ],
-  },
-  { group: 'Triceps', shapes: arms },
-  { group: 'Core', shapes: [{ t: 'path', d: 'M93 130 Q100 128 107 130 L107 182 Q100 186 93 182 Z' }] },
-  {
-    group: 'Legs',
-    shapes: [
-      { t: 'ellipse', cx: 114, cy: 221, rx: 13, ry: 14 },
-      { t: 'ellipse', cx: 86, cy: 221, rx: 13, ry: 14 },
-      { t: 'ellipse', cx: 118, cy: 272, rx: 16, ry: 42 },
-      { t: 'ellipse', cx: 82, cy: 272, rx: 16, ry: 42 },
-    ],
-  },
+  { group: 'Shoulders', d: REGION_PATHS.deltF },
+  { group: 'Back', d: REGION_PATHS.trap },
+  { group: 'Back', d: REGION_PATHS.lat },
+  { group: 'Back', d: REGION_PATHS.erector },
+  { group: 'Triceps', d: REGION_PATHS.tri },
+  { group: 'Legs', d: REGION_PATHS.glute },
+  { group: 'Legs', d: REGION_PATHS.ham },
+  { group: 'Legs', d: REGION_PATHS.calfB },
 ]
 
 /**
@@ -171,5 +165,5 @@ export function regionStyle(group, intensities) {
   const ratio = intensities[group]
   if (ratio == null) return null
   const color = MUSCLE_COLORS[group] || MUSCLE_COLORS.Other
-  return { fill: color, opacity: 0.32 + 0.45 * ratio }
+  return { fill: color, opacity: 0.3 + 0.4 * ratio }
 }
