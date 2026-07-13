@@ -65,7 +65,7 @@ describe('schema', () => {
     await runMigrations(sql)
     await runMigrations(sql) // second run must be a no-op, not an error
     const rows = (await sql`SELECT id FROM schema_migrations ORDER BY id`) as { id: number }[]
-    expect(rows.map((r) => Number(r.id))).toEqual([1, 2, 3])
+    expect(rows.map((r) => Number(r.id))).toEqual([1, 2, 3, 4])
     // The tables must actually exist — the neon bug recorded migrations while
     // the DDL silently no-op'd, so assert on real relations, not just tracking.
     const tables = (await sql`
