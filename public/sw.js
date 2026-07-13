@@ -6,8 +6,14 @@
 //  - Other same-origin GETs (hashed JS/CSS/icons): stale-while-revalidate —
 //    serve from cache instantly, refresh in the background.
 // All data lives in localStorage/IndexedDB, so nothing here touches user data.
+//
+// The cache name carries a per-build id (stamped in at build time from the
+// content-hashed asset names). Every deploy that changes assets therefore
+// ships a byte-different sw.js, so browsers — notably iOS home-screen PWAs —
+// install the new worker, whose `activate` deletes the previous cache. Without
+// this, a fixed cache name lets a stale cache shadow a fresh deploy forever.
 
-const CACHE = 'weight-room-v1'
+const CACHE = 'weight-room-__BUILD_ID__'
 const CORE = ['./', './index.html', './manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
