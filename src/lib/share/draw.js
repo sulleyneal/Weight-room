@@ -61,7 +61,7 @@ export function drawFigure(ctx, view, intensities, box) {
   ctx.clip(bodyClip)
   const regions = view === 'back' ? BACK_REGIONS : FRONT_REGIONS
   for (const r of regions) {
-    const style = regionStyle(r.group, intensities)
+    const style = regionStyle(r, intensities)
     if (!style) continue
     const path = new Path2D(r.d)
     ctx.fillStyle = style.fill
@@ -257,6 +257,15 @@ export function chip(ctx, text, x, y, { color, size = 24, pad = 14 } = {}) {
   ctx.fillStyle = color
   trackedText(ctx, text, x + pad, y + size * 0.36, size * 0.12)
   return w
+}
+
+/** chip() anchored by its RIGHT edge (margin-locked top-right chips). */
+export function chipRight(ctx, text, rightX, y, opts = {}) {
+  const size = opts.size ?? 24
+  const pad = opts.pad ?? 14
+  ctx.font = mono(size, 700)
+  const w = measureTracked(ctx, text, size * 0.12) + pad * 2
+  return chip(ctx, text, rightX - w, y, opts)
 }
 
 /** Small solid accent tick (muscle-group coding). */

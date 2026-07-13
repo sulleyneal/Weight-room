@@ -119,9 +119,9 @@ const REGION_PATHS = {
   abs: bez([[94, 130], [106, 130], [110, 136], [111, 158], [108, 184], [100, 198], [92, 184], [89, 158], [90, 136]], true),
   quad: bez([[133, 222], [136, 252], [130, 288], [120, 300], [109, 294], [107, 262], [112, 234], [124, 220]], true),
   trap: bez([[100, 74], [118, 82], [122, 92], [110, 104], [100, 110]], true),
-  lat: bez([[124, 100], [132, 118], [126, 140], [112, 154], [105, 158], [106, 132], [114, 112]], true),
+  lat: bez([[124, 100], [132, 118], [126, 140], [114, 154], [110, 158], [110, 132], [116, 112]], true),
   tri: bez([[148, 110], [160, 112], [165, 128], [162, 146], [152, 148], [146, 128]], true),
-  erector: bez([[102, 120], [108, 122], [108, 180], [102, 184]], true),
+  erector: bez([[101, 122], [107, 124], [107, 180], [101, 184]], true),
   glute: bez([[85, 208], [100, 205], [115, 208], [119, 226], [109, 242], [91, 242], [81, 226]], true),
   ham: bez([[131, 244], [133, 270], [126, 296], [112, 300], [108, 274], [110, 250], [120, 242]], true),
   calfB: bez([[121, 316], [123, 336], [115, 356], [108, 352], [106, 332], [110, 316]], true),
@@ -129,21 +129,21 @@ const REGION_PATHS = {
 
 // Entries: { group, d, noMirror? } — noMirror for center-line regions.
 export const FRONT_REGIONS = [
-  { group: 'Shoulders', d: REGION_PATHS.deltF },
-  { group: 'Chest', d: REGION_PATHS.pec },
-  { group: 'Biceps', d: REGION_PATHS.biceps },
-  { group: 'Core', d: REGION_PATHS.abs, noMirror: true },
-  { group: 'Legs', d: REGION_PATHS.quad },
+  { key: 'deltF', group: 'Shoulders', d: REGION_PATHS.deltF },
+  { key: 'pec', group: 'Chest', d: REGION_PATHS.pec },
+  { key: 'biceps', group: 'Biceps', d: REGION_PATHS.biceps },
+  { key: 'abs', group: 'Core', d: REGION_PATHS.abs, noMirror: true },
+  { key: 'quad', group: 'Legs', d: REGION_PATHS.quad },
 ]
 export const BACK_REGIONS = [
-  { group: 'Shoulders', d: REGION_PATHS.deltF },
-  { group: 'Back', d: REGION_PATHS.trap },
-  { group: 'Back', d: REGION_PATHS.lat },
-  { group: 'Back', d: REGION_PATHS.erector },
-  { group: 'Triceps', d: REGION_PATHS.tri },
-  { group: 'Legs', d: REGION_PATHS.glute },
-  { group: 'Legs', d: REGION_PATHS.ham },
-  { group: 'Legs', d: REGION_PATHS.calfB },
+  { key: 'deltF', group: 'Shoulders', d: REGION_PATHS.deltF },
+  { key: 'trap', group: 'Back', d: REGION_PATHS.trap },
+  { key: 'lat', group: 'Back', d: REGION_PATHS.lat },
+  { key: 'erector', group: 'Back', d: REGION_PATHS.erector },
+  { key: 'tri', group: 'Triceps', d: REGION_PATHS.tri },
+  { key: 'glute', group: 'Legs', d: REGION_PATHS.glute },
+  { key: 'ham', group: 'Legs', d: REGION_PATHS.ham },
+  { key: 'calfB', group: 'Legs', d: REGION_PATHS.calfB },
 ]
 
 /**
@@ -160,10 +160,25 @@ export function computeIntensities(groupVolumes) {
   return out
 }
 
-/** Fill + opacity for a worked region, or null when the group wasn't trained. */
-export function regionStyle(group, intensities) {
-  const ratio = intensities[group]
+/**
+ * Fill + opacity for a worked region, or null when it wasn't trained.
+ * Intensities are keyed by REGION key; color comes from the region's group.
+ * The alpha floor keeps cool colors legible at feed size.
+ */
+export function regionStyle(region, intensities) {
+  const ratio = intensities[region.key]
   if (ratio == null) return null
-  const color = MUSCLE_COLORS[group] || MUSCLE_COLORS.Other
-  return { fill: color, opacity: 0.3 + 0.4 * ratio }
+  const color = MUSCLE_COLORS[region.group] || MUSCLE_COLORS.Other
+  return { fill: color, opacity: 0.42 + 0.34 * ratio }
+}
+
+/** Rendered wash alpha for a group's strongest region (legend dot matching). */
+export function groupWashAlpha(group, regionIntensities, regions) {
+  let best = null
+  for (const r of regions) {
+    if (r.group !== group) continue
+    const ratio = regionIntensities[r.key]
+    if (ratio != null && (best == null || ratio > best)) best = ratio
+  }
+  return best == null ? 1 : 0.42 + 0.34 * best
 }
