@@ -299,6 +299,15 @@ export function lineChart(ctx, points, box, { color, baseline = true } = {}) {
       else latestRing(ctx, px(p), py(p), 9, color)
     } else if (p.flag) {
       prRing(ctx, px(p), py(p), 7)
+    } else {
+      // Small neutral tick so every session is visibly a point on the line
+      // (point count always matches the "N SESSIONS" claim).
+      ctx.beginPath()
+      ctx.arc(px(p), py(p), 4, 0, Math.PI * 2)
+      ctx.fillStyle = color
+      ctx.globalAlpha = 0.55
+      ctx.fill()
+      ctx.globalAlpha = 1
     }
   })
 }

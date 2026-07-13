@@ -578,12 +578,21 @@ export function renderMuscleCard(moment, formatKey = 'square') {
   const legendRows = moment.groups.length > 4 ? 2 : 1
   const legendH = legendRows * 54
   const legendTop = footerTop - legendH - (story ? 44 : 24)
-  const figTop = y + (story ? 90 : 56)
+  let figTop = y + (story ? 90 : 56)
   const figLabelH = 56
-  const figH = legendTop - figTop - figLabelH - (story ? 60 : 36)
+  const zoneH = legendTop - figTop - figLabelH - (story ? 60 : 36)
 
-  const figW = (figH / 400) * 200
-  const gap = Math.min(story ? 200 : 150, contentW - figW * 2)
+  // The pair must always clear a minimum gutter — on tall formats the
+  // height-fitted figures would otherwise scale until the hands interlock.
+  const minGap = story ? 140 : 110
+  let figH = zoneH
+  let figW = figH * 0.5 // figure aspect (622x1244)
+  if (figW * 2 + minGap > contentW) {
+    figW = (contentW - minGap) / 2
+    figH = figW * 2
+    figTop += (zoneH - figH) / 2 // re-center the shorter figures in the zone
+  }
+  const gap = Math.min(story ? 220 : 150, contentW - figW * 2)
   const pairW = figW * 2 + gap
   const startX = MARGIN + (contentW - pairW) / 2
   drawFigure(ctx, 'front', moment.intensities, { x: startX, y: figTop, w: figW, h: figH })
