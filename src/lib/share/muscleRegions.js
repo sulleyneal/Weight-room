@@ -8,33 +8,43 @@
 //
 // Muscle slugs match the anatomical figure data in bodyAnatomy.js.
 
+// Which muscle GROUP owns each anatomical slug — this is what colors the figure
+// and builds the "muscles worked" legend, so figure and legend always agree.
 export const SLUG_GROUP = {
   chest: 'Chest',
-  'upper-back': 'Back',
+  'upper-back': 'Lats',
   'lower-back': 'Back',
   trapezius: 'Back',
   deltoids: 'Shoulders',
   biceps: 'Biceps',
-  forearm: 'Biceps',
+  forearm: 'Forearms',
   triceps: 'Triceps',
   quadriceps: 'Legs',
   adductors: 'Legs',
-  gluteal: 'Legs',
+  gluteal: 'Glutes',
   hamstring: 'Legs',
-  calves: 'Legs',
-  tibialis: 'Legs',
-  abs: 'Core',
+  calves: 'Calves',
+  tibialis: 'Calves',
+  abs: 'Abs',
   obliques: 'Core',
 }
 
+// Fallback muscles for an exercise whose name isn't recognized, by its assigned
+// group. Compound groups list every muscle they typically hit (a leg press then
+// lights quads + glutes in their own colors — informative, not a bug).
 const GROUP_DEFAULTS = {
   Chest: ['chest'],
-  Back: ['upper-back', 'trapezius', 'lower-back'],
+  Back: ['upper-back', 'lower-back', 'trapezius'],
+  Lats: ['upper-back'],
   Shoulders: ['deltoids'],
   Biceps: ['biceps'],
+  Forearms: ['forearm'],
   Triceps: ['triceps'],
-  Legs: ['quadriceps', 'gluteal', 'hamstring', 'calves'],
+  Legs: ['quadriceps', 'hamstring', 'adductors'],
+  Glutes: ['gluteal'],
+  Calves: ['calves', 'tibialis'],
   Core: ['abs', 'obliques'],
+  Abs: ['abs'],
   Other: [],
 }
 
@@ -57,7 +67,8 @@ const NAME_RULES = [
   [/rotary torso|oblique|twist/, ['obliques']],
   [/abdominal|crunch|\bab\b|plank|leg raise/, ['abs']],
   [/lateral raise|shoulder|overhead|delt/, ['deltoids']],
-  [/pushdown|triceps|dip/, ['triceps']],
+  [/\bdips?\b/, ['chest', 'triceps']],
+  [/pushdown|triceps/, ['triceps']],
   [/forearm|wrist/, ['forearm']],
   [/curl/, ['biceps']], // after leg curl / face pull rules
   [/bench|chest|fly|pec|push-up|push up/, ['chest']],
@@ -98,6 +109,34 @@ export function computeIntensities(volumes) {
   if (max <= 0) return out
   for (const [key, vol] of Object.entries(volumes)) {
     if (vol > 0) out[key] = vol / max
+  }
+  return out
+}
+
+/**
+ * "Effort" per muscle slug for a session's exercises. Effort is volume
+ * (weight × reps) when there's load, but falls back to total reps for a
+ * bodyweight / zero-load exercise — so doing the reps still lights the muscle
+ * even with no weight entered. Weighted sessions are unchanged (effort == volume).
+ */
+export function regionEffortsFor(exercises) {
+  const out = {}
+  for (const ex of exercises) {
+    const effort = ex.volume > 0 ? ex.volume : ex.reps || ex.sets || 0
+    if (effort <= 0) continue
+    for (const key of regionsForExercise(ex.name, ex.group)) {
+      out[key] = (out[key] || 0) + effort
+    }
+  }
+  return out
+}
+
+/** Aggregate per-slug values into per-GROUP totals (for the legend). */
+export function groupTotalsFromRegions(regionValues) {
+  const out = {}
+  for (const [slug, v] of Object.entries(regionValues)) {
+    const group = SLUG_GROUP[slug] || 'Other'
+    out[group] = (out[group] || 0) + v
   }
   return out
 }

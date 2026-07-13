@@ -7,7 +7,11 @@ import {
   sessionsForMachine,
   prSessionsForMachine,
 } from '../metrics.js'
-import { computeIntensities, regionVolumesFor } from './muscleRegions.js'
+import {
+  computeIntensities,
+  regionEffortsFor,
+  groupTotalsFromRegions,
+} from './muscleRegions.js'
 
 const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0)
 
@@ -68,6 +72,7 @@ export function buildSessionMoment(state, date) {
       name: m?.name || 'Unknown exercise',
       group: m?.muscleGroup || 'Other',
       sets: ordered.length,
+      reps: ordered.reduce((sum, s) => sum + (Number(s.reps) || 0), 0),
       topWeight: top?.weight ?? 0,
       topReps: top?.reps ?? 0,
       volume,
@@ -217,24 +222,24 @@ export function buildProgressMoment(state, machineId, windowSessions = 20) {
 export function buildMuscleMoment(state, date) {
   const session = buildSessionMoment(state, date)
   if (!session) return null
-  const groupVolumes = {}
-  for (const ex of session.exercises) {
-    groupVolumes[ex.group] = (groupVolumes[ex.group] || 0) + ex.volume
-  }
-  const groups = Object.entries(groupVolumes)
+  // The whole map is muscle-driven: effort per anatomical slug (volume when
+  // there's load, reps when there isn't — so bodyweight work still lights),
+  // then the legend aggregates those same slugs into GROUPS. Figure colors and
+  // legend always agree, and a calf raise lights calves, not "legs" wholesale.
+  const regionEfforts = regionEffortsFor(session.exercises)
+  const groupTotals = groupTotalsFromRegions(regionEfforts)
+  const totalEffort = Object.values(groupTotals).reduce((a, b) => a + b, 0)
+  const groups = Object.entries(groupTotals)
     .map(([group, volume]) => ({
       group,
       volume,
-      share: session.totalVolume ? volume / session.totalVolume : 0,
+      share: totalEffort ? volume / totalEffort : 0,
     }))
     .sort((a, b) => b.volume - a.volume)
   return {
     ...session,
     groups,
-    // Region-level intensities, so "MUSCLES WORKED" only lights what the
-    // session's actual exercises hit (a calf PR lights calves; Low Back
-    // lights the erectors, not the lats).
-    intensities: computeIntensities(regionVolumesFor(session.exercises)),
+    intensities: computeIntensities(regionEfforts),
   }
 }
 

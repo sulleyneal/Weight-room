@@ -1,14 +1,20 @@
 import { uid } from '../lib/id.js'
 
 // Muscle-group taxonomy used for the body-part split summary and filtering.
+// Each group maps onto the anatomical body-map figure (see muscleRegions.js).
 export const MUSCLE_GROUPS = [
   'Chest',
   'Back',
+  'Lats',
   'Shoulders',
   'Biceps',
+  'Forearms',
   'Triceps',
   'Legs',
+  'Glutes',
+  'Calves',
   'Core',
+  'Abs',
 ]
 
 // Equipment types. Everything is logged as weight x reps; "Bodyweight" just
@@ -20,11 +26,16 @@ export const EQUIPMENT_TYPES = ['Machine', 'Barbell', 'Dumbbell', 'Cable', 'Body
 export const MUSCLE_COLORS = {
   Chest: '#f97316',
   Back: '#38bdf8',
+  Lats: '#6366f1',
   Shoulders: '#a855f7',
   Biceps: '#22c55e',
+  Forearms: '#84cc16',
   Triceps: '#eab308',
   Legs: '#ef4444',
+  Glutes: '#ec4899',
+  Calves: '#f59e0b',
   Core: '#14b8a6',
+  Abs: '#06b6d4',
   Other: '#94a3b8',
 }
 
